@@ -1,0 +1,42 @@
+[package]
+name = "yadns"
+version = "0.1.0"
+authors = ["zyj"]
+edition = "2021"
+
+[dependencies]
+trust-dns-proto = "0.23.0"
+trust-dns-server = "0.23.0"
+tokio = "1.32.0"
+slog = "2.7.0"
+slog-term = "2.9.0"
+slog-async = "2.8.0"
+lazy_static = "1.4.0"
+iprange = "0.6.7"
+ipnet = "2.8.0"
+failure = "0.1.8"
+clap = { version = "4.4.0", features = ["derive"] }
+toml = "0.7.8"
+serde = "1.0.188"
+serde_derive = "1.0.188"
+regex = "1.9.5"
+async-trait = "0.1.73"
+tracing = "0.1.37"
+thiserror = "1.0.48"
+anyhow = "1.0.75"
+futures = "0.3.28"
+async-recursion = "1.0.5"
+publicsuffix = "2.2.3"
+
+[target.'cfg(any(target_arch = "mips", target_arch = "mips64"))'.dependencies]
+trust-dns-resolver = { version = "0.23.0", default-features = false, features = ["dns-over-openssl"] }
+
+[target.'cfg(not(any(target_arch = "mips", target_arch = "mips64")))'.dependencies]
+trust-dns-resolver = { version = "0.23.0", default-features = false, features = ["dns-over-https-rustls"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+# codegen-units = 1
+panic = "abort"
+strip = "symbols"
