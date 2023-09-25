@@ -143,22 +143,6 @@ impl Handler {
             return Err(Error::InvalidMessageType(request.message_type()));
         }
         self.do_handle_request_default(request, response).await
-        /*
-        match request.query().name() {
-            name if self.myip_zone.zone_of(name) => {
-                self.do_handle_request_myip(request, response).await
-            }
-            name if self.counter_zone.zone_of(name) => {
-                self.do_handle_request_counter(request, response).await
-            }
-            name if self.hello_zone.zone_of(name) => {
-                self.do_handle_request_hello(request, response).await
-            }
-            name if self.root_zone.zone_of(name) => {
-                self.do_handle_request_default(request, response).await
-            }
-            name => Err(Error::InvalidZone(name.clone())),
-        }*/
     }
 }
 

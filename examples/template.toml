@@ -1,7 +1,7 @@
 # This file is just a demostration of all configurable options and has NO practical meanings.
 
 # Root privilege may be required if you specify a port below 1024.
-bind = "127.0.0.1:5300" # the address that yadd listens on
+bind = "127.0.0.1:5300" # the address that ya-dns listens on
 
 # DNS requests will be forwarded to all the upstream servers set up here
 # except those with `default = false`.
@@ -32,10 +32,18 @@ bind = "127.0.0.1:5300" # the address that yadd listens on
     # If you use DNS over TLS, you must give the TLS host of the upstream server.
     tls-host = "cloudflare-dns.com"
 
+  [upstreams.google]
+    # The default port 433 for DNS over HTTPS is used.
+    address = "8.8.8.8"
+    # DNS over HTTPS is supported.
+    network = "https"
+    # If you use DNS over HTTPS, you must give the TLS host of the upstream server.
+    tls-host = "dns.google"
+
   [upstreams.opennic]
     address = "2a05:dfc7:5::53"
     network = "udp"
-    # This tells yadd not to forward requests to this server by default.
+    # This tells ya-dns not to forward requests to this server by default.
     # But you can use it by applying dispatching rules.
     default = false
 
@@ -92,7 +100,7 @@ bind = "127.0.0.1:5300" # the address that yadd listens on
   domains = ["!poisoned"]
   upstreams = ["dnspod"]
 
-# This rule instructs yadd to dispatch AAAA queries to specific upstreams.
+# This rule instructs ya-dns to dispatch AAAA queries to specific upstreams.
 [[requests]]
   types = ["AAAA"]
   upstreams = ["opendns_v6", "cloudflare"]

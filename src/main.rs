@@ -5,6 +5,7 @@ use anyhow::Result;
 use clap::Parser;
 use failure::Error;
 use lazy_static::lazy_static;
+use option::Args;
 use slog::{crit, debug, info};
 use slog::{o, Drain, Logger};
 use std::fmt::Display;
@@ -22,6 +23,7 @@ mod domain;
 mod filter;
 mod handler;
 mod ip;
+mod option;
 mod resolver;
 
 lazy_static! {
@@ -34,10 +36,7 @@ const TCP_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let conf = config().unwrap_or_log();
-    //debug!(STDERR, "{:#?}", conf);
-
-    let bind_socket = conf.bind;
+    let bind_socket = APPCONFIG.bind.as_ref();
     let request_handler = Handler::new();
     let mut server = ServerFuture::new(request_handler);
 
@@ -52,20 +51,6 @@ async fn main() -> Result<()> {
     server.block_until_done().await?;
 
     Ok(())
-}
-
-#[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
-struct Args {
-    /// Name of the person to greet
-    #[arg(
-        short,
-        long,
-        default_value = "config.toml",
-        value_name = "CONFIG_FILE",
-        help = "Specify the config file"
-    )]
-    config: String,
 }
 
 fn config() -> Result<Config, Error> {

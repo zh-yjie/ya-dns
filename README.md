@@ -1,37 +1,33 @@
-# yadd
+# ya-dns
 
-[![Build Status](https://travis-ci.org/sticnarf/yadd.svg?branch=master)](https://travis-ci.org/sticnarf/yadd) [![AppVeyor Status](https://ci.appveyor.com/api/projects/status/github/sticnarf/yadd?branch=master&svg=true)](https://ci.appveyor.com/project/sticnarf/yadd)
+![releases](https://github.com/zh-yjie/ya-dns/workflows/release/badge.svg)
+![build](https://github.com/zh-yjie/ya-dns/workflows/build/badge.svg)
 
-Yadd (**Y**et **A**nother **D**NS **D**ispatcher) forwards DNS queries to multiple servers in parallel and decides which result to return by custom rules.
+Ya-DNS provides a binary for forwarding DNS.
 
-It aims to be fast and flexible but yet easy to use.
+It forwards DNS queries to multiple servers and decides which result to return by custom rules.
 
-Prebuilt releases are available [here](https://github.com/sticnarf/yadd/releases). 
-
-Because the docs in the master branch may be newer than the release you use, please switch to the corresponding git tag before going on reading.
+Prebuilt releases are available [here](https://github.com/zh-yjie/ya-dns/releases). 
 
 ## Features
 
-* DNS over various protocols
-  * UDP
-  * TCP
-  * TLS
-
-* Rule based dispatching and response filtering
-
-* Good performance
-  * Parallel forwarding
-  * TCP connection reuse
+* UDP
+* TCP
+* DNS over TLS (DoT)
+* DNS over HTTPS (DoH)
+* Rule based forwarding
+* Rule based response filtering
+* Parallel forwarding
   
 ## Usage
 
 The path of the configuration file is passed using `-c`:
 
 ```bash
-$ ./yadd -c <CONFIG_FILE>
+$ ./yadns -c <CONFIG_FILE>
 ```
 
-If you ignore `-c`, yadd will load `config.toml`.
+If you ignore `-c`, it will load `config.toml`.
 
 *Note: All non-absolute file paths (in the command line arguments and in the config file) are relative to the working directory instead of the location of the executable or the config file.*
 
@@ -46,4 +42,16 @@ If you ignore `-c`, yadd will load `config.toml`.
 
 ## Build
 
-The minimum required Rustc version is 1.31 (Rust 2018).
+The current minimum rustc version for this project is 1.64
+
+Install Rust: https://www.rust-lang.org/tools/install
+
+Install GCC or Clang.
+
+Clone & Build:
+```sh
+git clone --recursive https://github.com/zh-yjie/ya-dns.git
+cd ya-dns
+cargo build --release
+```
+

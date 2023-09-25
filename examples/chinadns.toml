@@ -20,7 +20,8 @@ bind = "127.0.0.1:5300"
 
 [ranges]
   [ranges.cn]
-  files = ["chnroutes.txt"]
+  # download from https://www.ipdeny.com/ipblocks/data/aggregated/cn.zone
+  files = ["cn.txt"]
 
 [[responses]]
 upstreams = ["dnspod", "alidns"]

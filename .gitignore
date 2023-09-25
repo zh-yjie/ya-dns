@@ -1,3 +1,7 @@
 /target
 **/*.rs.bk
 /.idea
+/config.toml
+/cn.txt
+/proxy-list.txt
+/direct-list.txt

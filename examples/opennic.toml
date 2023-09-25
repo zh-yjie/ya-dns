@@ -6,7 +6,7 @@ bind = "127.0.0.1:5300"
     network = "udp"
 
   [upstreams.opennic]
-  address = "185.121.177.177"
+  address = "172.104.162.222"
   network = "udp"
   default = false
 

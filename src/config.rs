@@ -1,9 +1,7 @@
-use crate::domain::DomainSuffix;
 use crate::ip::IpRange;
 use crate::Transpose;
 use failure::{err_msg, Error};
 use ipnet::IpNet;
-use regex::RegexSet;
 use serde_derive::Deserialize;
 use std::collections::HashMap;
 use std::fs::File;
@@ -209,8 +207,8 @@ impl IpRangeConf {
 
 #[derive(Debug)]
 pub struct Domains {
-    pub regex_set: RegexSet,
-    pub suffix: DomainSuffix,
+    pub regex_set: Vec<String>,
+    pub suffix_set: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -220,16 +218,23 @@ struct DomainsConf {
 }
 
 impl DomainsConf {
-    fn domain_to_regex_string(domain: &str) -> String {
-        let mut regex_str = domain.replace(".", r"\.");
-        regex_str.push_str(r"\.?$");
-        regex_str
-    }
-
     fn build(self) -> Result<Domains, Error> {
         let mut regex_set = Vec::new();
-        let mut suffix = Vec::new();
-        suffix.push(String::from("// BEGIN ICANN DOMAINS"));
+        let mut suffix_set = Vec::new();
+        suffix_set.push(String::from("// BEGIN ICANN DOMAINS"));
+
+        let mut push = |line: &str| {
+            if line.is_empty() || line.starts_with("#") {
+                return;
+            }
+            if line.starts_with("regexp:") {
+                let line1 = line.trim_start_matches("regexp:");
+                regex_set.push(String::from(line1));
+            } else {
+                let line1 = line.trim_start_matches("full:").trim_start_matches(".");
+                suffix_set.push(String::from(line1));
+            }
+        };
 
         if let Some(files) = &self.files {
             for file in files {
@@ -238,38 +243,20 @@ impl DomainsConf {
                 for line in reader.lines() {
                     let line = line?;
                     let line = line.trim();
-                    if line.is_empty() || line.starts_with("#") {
-                        continue;
-                    }
-                    if line.starts_with("regex:") {
-                        let line1 = line.trim_start_matches("regex:");
-                        regex_set.push(Self::domain_to_regex_string(line1));
-                    } else {
-                        let line1 = line.trim_start_matches("full:").trim_start_matches(".");
-                        suffix.push(String::from(line1));
-                    }
+                    push(line);
                 }
             }
         }
 
         if let Some(list) = &self.list {
             for line in list {
-                if line.starts_with("regex:") {
-                    let line1 = line.trim_start_matches("regex:");
-                    regex_set.push(Self::domain_to_regex_string(line1));
-                } else {
-                    let line1 = line.trim_start_matches("full:").trim_start_matches(".");
-                    suffix.push(String::from(line1));
-                }
+                push(line);
             }
         }
 
-        let ds = DomainSuffix::new(suffix.join("\n").as_str());
-        //println!("{:?} {}", self.list, ds.contains("www.github.geek"));
-        //println!("{:?} {}", self.files, ds.contains("www.github.com"));
         Ok(Domains {
-            regex_set: RegexSet::new(&regex_set)?,
-            suffix: ds,
+            regex_set,
+            suffix_set,
         })
     }
 }

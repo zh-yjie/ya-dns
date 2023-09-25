@@ -59,61 +59,18 @@ pub fn check_response(domain: &str, upstream_name: &str, resp: &Lookup) -> RuleA
             .unwrap_or(true) // No ranges field means matching all ranges
     };
 
-    let check_domains = |rule: &ResponseRule| {
-        rule.domains
-            .as_ref()
-            .map(|d| {
-                d.iter().any(|domains_pattern| {
-                    // Process the leading `!`
-                    let domains_tag = domains_pattern.trim_start_matches('!');
-                    let toggle = (domains_pattern.len() - domains_pattern.len()) % 2 == 1;
-
-                    let domains = APPCONFIG.domains.get(domains_tag);
-                    domains
-                        .map(|domains| {
-                            (domains.regex_set.is_match(domain)
-                                || domains.suffix.contains(domain.trim_end_matches(".")))
-                                ^ toggle
-                        })
-                        .unwrap_or(false)
-                })
-            })
-            .unwrap_or(true) // No domains field means matching all domains
-    };
-
     APPCONFIG
         .response_rules
         .iter()
-        .find(|rule| check_upstream(rule) && check_ranges(rule) && check_domains(rule))
+        .find(|rule| {
+            check_upstream(rule) && check_ranges(rule) && check_domains(domain, &rule.domains)
+        })
         .map(|rule| rule.action)
         .unwrap_or(RuleAction::Accept)
 }
 
 pub fn resolvers(query: &LowerQuery) -> Vec<(&str, Arc<RecursiveResolver>)> {
     let name = query.name().to_string();
-
-    let check_domains = |rule: &RequestRule| {
-        rule.domains
-            .as_ref()
-            .map(|d| {
-                d.iter().any(|domains_pattern| {
-                    // Process the leading `!`
-                    let domains_tag = domains_pattern.trim_start_matches('!');
-                    let toggle = (domains_pattern.len() - domains_pattern.len()) % 2 == 1;
-
-                    println!("domains_tag:{} toggle:{}", domains_tag, toggle);
-                    let domains = APPCONFIG.domains.get(domains_tag);
-                    domains
-                        .map(|domains| {
-                            (domains.regex_set.is_match(&name)
-                                || domains.suffix.contains(&name.trim_end_matches(".")))
-                                ^ toggle
-                        })
-                        .unwrap_or(false)
-                })
-            })
-            .unwrap_or(true) // No domains field means matching all domains
-    };
 
     let check_type = |rule: &RequestRule| {
         rule.types
@@ -125,7 +82,7 @@ pub fn resolvers(query: &LowerQuery) -> Vec<(&str, Arc<RecursiveResolver>)> {
     let rule = APPCONFIG
         .request_rules
         .iter()
-        .find(|r| check_domains(r) && check_type(r));
+        .find(|r| check_domains(&name, &r.domains) && check_type(r));
 
     if let Some(rule) = rule {
         debug!(STDERR, "Query {} matches rule {:?}", name, rule);
@@ -142,4 +99,25 @@ pub fn resolvers(query: &LowerQuery) -> Vec<(&str, Arc<RecursiveResolver>)> {
             .filter_map(|u| APPCONFIG.resolvers.get(u).map(|v| (u.as_str(), v.clone())))
             .collect()
     }
+}
+
+fn check_domains(domain: &str, domains: &Option<Vec<String>>) -> bool {
+    let name = domain.trim_end_matches(".");
+    domains
+        .as_ref()
+        .map(|d| {
+            d.iter().any(|domains_pattern| {
+                // Process the leading `!`
+                let domains_tag = domains_pattern.trim_start_matches('!');
+                let toggle = (domains_pattern.len() - domains_pattern.len()) % 2 == 1;
+                let domains = APPCONFIG.domains.get(domains_tag);
+                domains
+                    .map(|domains| {
+                        (domains.regex_set.is_match(&name) || domains.suffix.contains(&name))
+                            ^ toggle
+                    })
+                    .unwrap_or(false)
+            })
+        })
+        .unwrap_or(true) // No domains field means matching all domains
 }

@@ -1,6 +1,3 @@
-# This file is a combination of examples/chinadns.toml and examples/opennic.toml.
-# Check examples/template.toml for advanced usages.
-
 bind = "127.0.0.1:5300"
 
 [upstreams]
@@ -35,7 +32,17 @@ bind = "127.0.0.1:5300"
   ]
 
   [domains.proxy]
+  # download from https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/proxy-list.txt
   files = ["proxy-list.txt"]
+
+  [domains.direct]
+  # download from https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/direct-list.txt
+  files = ["direct-list.txt"]
+
+[ranges]
+  [ranges.cn]
+  # download from https://www.ipdeny.com/ipblocks/data/aggregated/cn.zone
+  files = ["cn.txt"]
 
 [[requests]]
 domains = ["opennic"]
@@ -45,9 +52,9 @@ upstreams = ["opennic"]
 domains = ["proxy"]
 upstreams = ["google","cloudflare"]
 
-[ranges]
-  [ranges.cn]
-  files = ["cn.txt"]
+[[requests]]
+domains = ["direct"]
+upstreams = ["dnspod","alidns"]
 
 [[responses]]
 upstreams = ["dnspod", "alidns"]
