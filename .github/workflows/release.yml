@@ -30,7 +30,7 @@ jobs:
 
       - name: install deps
         run: |
-          sudo apt update && sudo apt install llvm-dev libclang-dev clang libssl-dev pkg-config protobuf-compiler make openssl -y
+          sudo apt update && sudo apt install llvm-dev libclang-dev clang libssl-dev pkg-config protobuf-compiler make libssl-dev -y
 
       - name: install cross
         run: |
