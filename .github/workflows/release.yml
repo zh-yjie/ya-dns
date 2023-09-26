@@ -70,13 +70,10 @@ jobs:
   build-bin-local:
     strategy:
       matrix:
-        os: [macos-latest]
-        include:
-          - os: macos-latest
-            target: x86_64-apple-darwin
-          - os: macos-latest
-            target: aarch64-apple-darwin
-    runs-on: ${{ matrix.os }}
+        target:
+          - x86_64-apple-darwin
+          - aarch64-apple-darwin
+    runs-on: macos-latest
     steps:
       - name: checkout
         uses: actions/checkout@v3
@@ -87,7 +84,6 @@ jobs:
           rust-version: nightly
 
       - name: install llvm
-        if: ${{ matrix.os == 'macos-latest' }}
         run: |
           brew install llvm protobuf
 
@@ -96,7 +92,7 @@ jobs:
           export CFG_COMMIT_HASH=`git log --pretty=format:'%h' -n 1`
           export CFG_COMMIT_DATE=`git log --format="%ci" -n 1`
           rustup target add ${{ matrix.target }}
-          SDKROOT=$(xcrun -sdk macosx14.0 --show-sdk-path) MACOSX_DEPLOYMENT_TARGET=$(xcrun -sdk macosx14.0 --show-sdk-platform-version) cargo build --release --target ${{ matrix.target }}
+          SDKROOT=$(xcrun -sdk macosx13.0 --show-sdk-path) MACOSX_DEPLOYMENT_TARGET=$(xcrun -sdk macosx13.0 --show-sdk-platform-version) cargo build --release --target ${{ matrix.target }}
 
       - name: rename and compress artifacts
         run: |
@@ -112,10 +108,6 @@ jobs:
     needs: [build-bin-cross, build-bin-local]
     runs-on: macos-latest
     steps:
-      - name: checkout
-        uses: actions/checkout@v2
-        with:
-          submodules: true
 
       - name: Create Release
         id: create_release
