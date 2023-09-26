@@ -4,6 +4,13 @@ version = "0.1.1"
 authors = ["zyj"]
 edition = "2021"
 
+[features]
+default = ["default-rustls"]
+default-rustls = ["dns-over-tls", "dns-over-https"]
+default-openssl = ["dns-over-tls", "openssl"]
+dns-over-tls = ["trust-dns-resolver"]
+dns-over-https = ["trust-dns-resolver"]
+
 [dependencies]
 trust-dns-proto = "0.23.0"
 trust-dns-server = "0.23.0"
@@ -29,11 +36,11 @@ async-recursion = "1.0.5"
 publicsuffix = "2.2.3"
 
 [target.'cfg(any(target_arch = "mips", target_arch = "mips64"))'.dependencies]
-trust-dns-resolver = { version = "0.23.0", default-features = false, features = ["dns-over-openssl"] }
-openssl = { version = "0.10", features = ["vendored"] }
+trust-dns-resolver = { version = "0.23.0", default-features = false, features = ["dns-over-openssl"], optional = true }
+openssl = { version = "0.10", features = ["vendored"], optional = true }
 
 [target.'cfg(not(any(target_arch = "mips", target_arch = "mips64")))'.dependencies]
-trust-dns-resolver = { version = "0.23.0", default-features = false, features = ["dns-over-https-rustls"] }
+trust-dns-resolver = { version = "0.23.0", default-features = false, features = ["dns-over-https-rustls"], optional = true }
 
 [profile.release]
 opt-level = 3

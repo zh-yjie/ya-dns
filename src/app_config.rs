@@ -45,6 +45,7 @@ impl AppConfig {
                         Upstream::TlsUpstream { address, tls_host } => {
                             Arc::new(resolver::tls_resolver(address, tls_host))
                         }
+                        #[cfg(feature = "dns-over-https")]
                         Upstream::HttpsUpstream { address, tls_host } => {
                             Arc::new(resolver::https_resolver(address, tls_host))
                         }
