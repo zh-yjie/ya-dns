@@ -113,7 +113,6 @@ where
     }
 }
 
-// Wait for #47338 to be stable
 trait Transpose {
     type Output;
     fn transpose(self) -> Self::Output;

@@ -1,10 +1,8 @@
 use crate::{
     config::{RequestRule, ResponseRule, RuleAction},
-    resolver::RecursiveResolver,
     APPCONFIG, STDERR,
 };
 use slog::debug;
-use std::sync::Arc;
 use trust_dns_proto::{op::LowerQuery, rr::RecordType};
 use trust_dns_resolver::lookup::Lookup;
 
@@ -69,7 +67,7 @@ pub fn check_response(domain: &str, upstream_name: &str, resp: &Lookup) -> RuleA
         .unwrap_or(RuleAction::Accept)
 }
 
-pub fn resolvers(query: &LowerQuery) -> Vec<(&str, Arc<RecursiveResolver>)> {
+pub fn resolvers(query: &LowerQuery) -> Vec<&str> {
     let name = query.name().to_string();
 
     let check_type = |rule: &RequestRule| {
@@ -86,18 +84,11 @@ pub fn resolvers(query: &LowerQuery) -> Vec<(&str, Arc<RecursiveResolver>)> {
 
     if let Some(rule) = rule {
         debug!(STDERR, "Query {} matches rule {:?}", name, rule);
-        rule.upstreams
-            .iter()
-            .filter_map(|u| APPCONFIG.resolvers.get(u).map(|v| (u.as_str(), v.clone())))
-            .collect()
+        rule.upstreams.iter().map(String::as_str).collect()
     } else {
         debug!(STDERR, "No rule matches for {}. Use defaults.", name);
         // If no rule matches, use defaults
-        APPCONFIG
-            .defaults
-            .iter()
-            .filter_map(|u| APPCONFIG.resolvers.get(u).map(|v| (u.as_str(), v.clone())))
-            .collect()
+        APPCONFIG.defaults.iter().map(String::as_str).collect()
     }
 }
 

@@ -1,6 +1,6 @@
 [package]
 name = "yadns"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["zyj"]
 edition = "2021"
 
@@ -30,6 +30,7 @@ publicsuffix = "2.2.3"
 
 [target.'cfg(any(target_arch = "mips", target_arch = "mips64"))'.dependencies]
 trust-dns-resolver = { version = "0.23.0", default-features = false, features = ["dns-over-openssl"] }
+openssl = { version = "0.10", features = ["vendored"] }
 
 [target.'cfg(not(any(target_arch = "mips", target_arch = "mips64")))'.dependencies]
 trust-dns-resolver = { version = "0.23.0", default-features = false, features = ["dns-over-https-rustls"] }

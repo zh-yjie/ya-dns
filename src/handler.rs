@@ -5,13 +5,7 @@ use futures::{
     Future, FutureExt, TryFutureExt,
 };
 use slog::{debug, error};
-use std::{
-    pin::Pin,
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc,
-    },
-};
+use std::pin::Pin;
 use trust_dns_resolver::{error::ResolveError, lookup::Lookup};
 use trust_dns_server::{
     authority::MessageResponseBuilder,
@@ -32,15 +26,14 @@ pub enum Error {
 /// DNS Request Handler
 #[derive(Clone)]
 pub struct Handler {
-    /// Request counter, incremented on every successful request.
-    pub counter: Arc<AtomicU64>,
+    //pub counter: Arc<AtomicU64>,
 }
 
 impl Handler {
     /// Create new handler from command-line options.
     pub fn new() -> Self {
         Handler {
-            counter: Arc::new(AtomicU64::new(0)),
+            // counter: Arc::new(AtomicU64::new(0)),
         }
     }
 
@@ -50,7 +43,7 @@ impl Handler {
         request: &Request,
         mut responder: R,
     ) -> Result<ResponseInfo, Error> {
-        self.counter.fetch_add(1, Ordering::SeqCst);
+        //self.counter.fetch_add(1, Ordering::SeqCst);
         let builder = MessageResponseBuilder::from_message_request(request);
         let mut header = Header::response_from_request(request.header());
         header.set_authoritative(true);
@@ -58,7 +51,7 @@ impl Handler {
         let resolvers = filter::resolvers(request.query());
         let tasks: Vec<_> = resolvers
             .into_iter()
-            .map(|(name, _)| {
+            .map(|name| {
                 let domain1 = request.query().name().to_string().to_owned();
                 let domain2 = request.query().name().to_string().to_owned();
                 let query_type = request.query().query_type().to_owned();

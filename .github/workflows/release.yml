@@ -11,7 +11,7 @@ jobs:
     strategy:
       matrix:
         target:
-          #- mips-unknown-linux-musl
+          - mips-unknown-linux-musl
             #          - mipsel-unknown-linux-musl
           - x86_64-unknown-linux-musl
             #          - i686-unknown-linux-musl
@@ -19,6 +19,7 @@ jobs:
             #          - arm-unknown-linux-musleabi
             #          - armv7-unknown-linux-musleabihf
           - x86_64-pc-windows-gnu
+          - x86_64-unknown-freebsd
     steps:
       - name: checkout
         uses: actions/checkout@v3
@@ -30,7 +31,7 @@ jobs:
 
       - name: install deps
         run: |
-          sudo apt update && sudo apt install llvm-dev libclang-dev clang libssl-dev pkg-config protobuf-compiler make libssl-dev -y
+          sudo apt update && sudo apt install llvm-dev libclang-dev clang libssl-dev pkg-config protobuf-compiler make -y
 
       - name: install cross
         run: |
@@ -73,6 +74,8 @@ jobs:
         include:
           - os: macos-latest
             target: x86_64-apple-darwin
+          - os: macos-latest
+            target: aarch64-apple-darwin
     runs-on: ${{ matrix.os }}
     steps:
       - name: checkout
@@ -92,7 +95,8 @@ jobs:
         run: |
           export CFG_COMMIT_HASH=`git log --pretty=format:'%h' -n 1`
           export CFG_COMMIT_DATE=`git log --format="%ci" -n 1`
-          cargo build --release --target ${{ matrix.target }}
+          rustup target add ${{ matrix.target }}
+          SDKROOT=$(xcrun -sdk macosx14.0 --show-sdk-path) MACOSX_DEPLOYMENT_TARGET=$(xcrun -sdk macosx14.0 --show-sdk-platform-version) cargo build --release --target ${{ matrix.target }}
 
       - name: rename and compress artifacts
         run: |
@@ -141,7 +145,8 @@ jobs:
       matrix:
         target:
           - x86_64-apple-darwin
-          #- mips-unknown-linux-musl
+          - aarch64-apple-darwin
+          - mips-unknown-linux-musl
             #          - mipsel-unknown-linux-musl
           - x86_64-unknown-linux-musl
             #          - i686-unknown-linux-musl
@@ -149,6 +154,7 @@ jobs:
             #          - arm-unknown-linux-musleabi
             #          - armv7-unknown-linux-musleabihf
           - x86_64-pc-windows-gnu
+          - x86_64-unknown-freebsd
     steps:
       - name: download upload url
         uses: actions/download-artifact@v2

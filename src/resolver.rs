@@ -27,52 +27,34 @@ impl RecursiveResolver {
 
 pub fn udp_resolver(address: &SocketAddr) -> RecursiveResolver {
     let mut resolver_config = ResolverConfig::new();
-    resolver_config.add_name_server(NameServerConfig {
-        socket_addr: *address,
-        protocol: Protocol::Udp,
-        tls_dns_name: None,
-        trust_negative_responses: true,
-        tls_config: None,
-        bind_addr: None,
-    });
+    resolver_config.add_name_server(NameServerConfig::new(*address, Protocol::Udp));
     RecursiveResolver::new(resolver_config)
 }
 
 pub fn tcp_resolver(address: &SocketAddr) -> RecursiveResolver {
     let mut resolver_config = ResolverConfig::new();
-    resolver_config.add_name_server(NameServerConfig {
-        socket_addr: *address,
-        protocol: Protocol::Tcp,
-        tls_dns_name: None,
-        trust_negative_responses: true,
-        tls_config: None,
-        bind_addr: None,
-    });
+    resolver_config.add_name_server(NameServerConfig::new(*address, Protocol::Tcp));
     RecursiveResolver::new(resolver_config)
 }
 
 pub fn tls_resolver(address: &SocketAddr, tls_host: &String) -> RecursiveResolver {
     let mut resolver_config = ResolverConfig::new();
-    resolver_config.add_name_server(NameServerConfig {
-        socket_addr: *address,
-        protocol: Protocol::Tls,
-        tls_dns_name: Some(tls_host.to_owned()),
-        trust_negative_responses: true,
-        tls_config: None,
-        bind_addr: None,
-    });
+    let mut name_server_config = NameServerConfig::new(*address, Protocol::Tls);
+    name_server_config.tls_dns_name = Some(tls_host.to_owned());
+    resolver_config.add_name_server(name_server_config);
     RecursiveResolver::new(resolver_config)
 }
 
+#[cfg(not(any(target_arch = "mips", target_arch = "mips64")))]
 pub fn https_resolver(address: &SocketAddr, tls_host: &String) -> RecursiveResolver {
     let mut resolver_config = ResolverConfig::new();
-    resolver_config.add_name_server(NameServerConfig {
-        socket_addr: *address,
-        protocol: Protocol::Https,
-        tls_dns_name: Some(tls_host.to_owned()),
-        trust_negative_responses: true,
-        tls_config: None,
-        bind_addr: None,
-    });
+    let mut name_server_config = NameServerConfig::new(*address, Protocol::Https);
+    name_server_config.tls_dns_name = Some(tls_host.to_owned());
+    resolver_config.add_name_server(name_server_config);
     RecursiveResolver::new(resolver_config)
+}
+
+#[cfg(any(target_arch = "mips", target_arch = "mips64"))]
+pub fn https_resolver(address: &SocketAddr, tls_host: &String) -> RecursiveResolver {
+    tls_resolver(address, tls_host)
 }
