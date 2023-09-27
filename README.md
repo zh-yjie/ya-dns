@@ -35,6 +35,8 @@ If you ignore `-c`, it will load `config.toml`.
 
 * [ChinaDNS](examples/chinadns.toml) (Users in China should prefer this.)
 
+* [Domain rule based chinaDNS](examples/chinadns-domain.toml) (Users in China should prefer this.)
+
 * [OpenNIC](examples/opennic.toml) (Use OpenNIC DNS for OpenNIC domains and Google DNS for the others.)
 
 * [Template with all configurable settings](examples/template.toml)

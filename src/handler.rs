@@ -6,7 +6,11 @@ use futures::{
 };
 use slog::{debug, error};
 use std::pin::Pin;
-use trust_dns_resolver::{error::ResolveError, lookup::Lookup};
+use trust_dns_proto::op::Query;
+use trust_dns_resolver::{
+    error::{ResolveError, ResolveErrorKind},
+    lookup::Lookup,
+};
 use trust_dns_server::{
     authority::MessageResponseBuilder,
     proto::op::{Header, MessageType, OpCode, ResponseCode},
@@ -44,10 +48,6 @@ impl Handler {
         mut responder: R,
     ) -> Result<ResponseInfo, Error> {
         //self.counter.fetch_add(1, Ordering::SeqCst);
-        let builder = MessageResponseBuilder::from_message_request(request);
-        let mut header = Header::response_from_request(request.header());
-        header.set_authoritative(true);
-
         let resolvers = filter::resolvers(request.query());
         let tasks: Vec<_> = resolvers
             .into_iter()
@@ -69,6 +69,7 @@ impl Handler {
         #[async_recursion]
         async fn process_all(
             handler: &Handler,
+            error: Option<ResolveError>,
             tasks: Vec<
                 MapErr<
                     MapOk<
@@ -79,10 +80,20 @@ impl Handler {
                     >,
                     impl FnOnce(ResolveError) -> (String, ResolveError) + 'static + Send,
                 >,
-            >, // responses that are not received yet
-        ) -> Result<Lookup, Error> {
+            >,
+        ) -> Result<Lookup, ResolveError> {
+            // responses that are not received yet
             if tasks.is_empty() {
-                Err(Error::InvalidOpCode(OpCode::Query))
+                Err(error.unwrap_or(
+                    ResolveErrorKind::NoRecordsFound {
+                        query: Box::new(Query::new()),
+                        soa: *Box::new(None),
+                        negative_ttl: None,
+                        response_code: ResponseCode::NXDomain,
+                        trusted: false,
+                    }
+                    .into(),
+                ))
             } else {
                 match future::select_all(tasks).await {
                     (Ok((domain, name, resp)), _index, remaining) => {
@@ -94,24 +105,46 @@ impl Handler {
                                 debug!(STDERR, "Use result from {}", name);
                                 Ok(resp)
                             }
-                            RuleAction::Drop => process_all(handler, remaining).await,
+                            RuleAction::Drop => process_all(handler, None, remaining).await,
                         }
                     }
                     (Err((name, e)), _index, remaining) => {
                         error!(STDERR, "{}: {}", name, e);
-                        process_all(handler, remaining).await
+                        process_all(handler, Some(e), remaining).await
                     }
                 }
             }
         }
 
-        match process_all(self, tasks).await {
+        let builder = MessageResponseBuilder::from_message_request(request);
+        let mut header = Header::response_from_request(request.header());
+        header.set_recursion_available(true);
+        match process_all(self, None, tasks).await {
             Ok(lookup) => {
                 let records = lookup.records();
                 let response = builder.build(header, records.iter(), &[], &[], &[]);
                 Ok(responder.send_response(response).await?)
             }
-            Err(e) => Err(e),
+            Err(e) => {
+                let (soa, response_code) = match e.kind() {
+                    ResolveErrorKind::NoRecordsFound {
+                        query: _,
+                        ref soa,
+                        negative_ttl: _,
+                        response_code,
+                        trusted: _,
+                    } => (soa.clone(), *response_code),
+                    _ => (*Box::new(None), ResponseCode::NoError),
+                };
+                //let mut header = Header::new();
+                header.set_response_code(response_code);
+                let soa = &match soa {
+                    Some(soa) => vec![soa.as_ref().to_owned().into_record_of_rdata()],
+                    None => vec![],
+                }[..];
+                let response = builder.build(header, &[], &[], soa, &[]);
+                Ok(responder.send_response(response).await?)
+            }
         }
     }
 

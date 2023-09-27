@@ -57,6 +57,7 @@ domains = ["direct"]
 upstreams = ["dnspod","alidns"]
 
 [[responses]]
+domains = ["!direct"]
 upstreams = ["dnspod", "alidns"]
 ranges = ["!cn"]
 action = "drop"

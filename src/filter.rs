@@ -100,7 +100,7 @@ fn check_domains(domain: &str, domains: &Option<Vec<String>>) -> bool {
             d.iter().any(|domains_pattern| {
                 // Process the leading `!`
                 let domains_tag = domains_pattern.trim_start_matches('!');
-                let toggle = (domains_pattern.len() - domains_pattern.len()) % 2 == 1;
+                let toggle = (domains_pattern.len() - domains_tag.len()) % 2 == 1;
                 let domains = APPCONFIG.domains.get(domains_tag);
                 domains
                     .map(|domains| {
