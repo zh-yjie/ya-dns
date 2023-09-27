@@ -11,7 +11,7 @@ jobs:
     strategy:
       matrix:
         target:
-          - mips-unknown-linux-musl --features=default-openssl
+          - mips-unknown-linux-musl --features=default-openssl --no-default-features
             #          - mipsel-unknown-linux-musl
           - x86_64-unknown-linux-musl
             #          - i686-unknown-linux-musl

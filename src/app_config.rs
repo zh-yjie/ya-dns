@@ -42,6 +42,7 @@ impl AppConfig {
                         Upstream::UdpUpstream { address } => {
                             Arc::new(resolver::udp_resolver(address))
                         }
+                        #[cfg(feature = "dns-over-tls")]
                         Upstream::TlsUpstream { address, tls_host } => {
                             Arc::new(resolver::tls_resolver(address, tls_host))
                         }

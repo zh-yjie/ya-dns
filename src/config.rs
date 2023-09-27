@@ -41,6 +41,7 @@ pub enum Upstream {
     UdpUpstream {
         address: SocketAddr,
     },
+    #[cfg(feature = "dns-over-tls")]
     TlsUpstream {
         address: SocketAddr,
         tls_host: String,
@@ -113,6 +114,7 @@ impl ConfigBuilder {
 pub struct UpstreamConfig {
     address: String,
     network: NetworkType,
+    #[cfg(any(feature = "dns-over-tls", feature = "dns-over-https"))]
     #[serde(rename = "tls-host")]
     tls_host: Option<String>,
     #[serde(default = "UpstreamConfig::default_default")]
@@ -136,6 +138,7 @@ impl UpstreamConfig {
         match self.network {
             NetworkType::Tcp => Ok(Upstream::TcpUpstream { address }),
             NetworkType::Udp => Ok(Upstream::UdpUpstream { address }),
+            #[cfg(feature = "dns-over-tls")]
             NetworkType::Tls => {
                 let tls_host = self.tls_host.ok_or(err_msg("tls-host is missing"))?;
                 Ok(Upstream::TlsUpstream { address, tls_host })
@@ -155,6 +158,7 @@ enum NetworkType {
     Tcp,
     #[serde(rename = "udp")]
     Udp,
+    #[cfg(feature = "dns-over-tls")]
     #[serde(rename = "tls")]
     Tls,
     #[cfg(feature = "dns-over-https")]
@@ -166,6 +170,7 @@ impl NetworkType {
     fn default_port(&self) -> u16 {
         match self {
             NetworkType::Tcp | NetworkType::Udp => 53,
+            #[cfg(feature = "dns-over-tls")]
             NetworkType::Tls => 853,
             #[cfg(feature = "dns-over-https")]
             NetworkType::Https => 443,

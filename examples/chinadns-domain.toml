@@ -11,7 +11,7 @@ bind = "127.0.0.1:5300"
 
   [upstreams.google]
   address = "8.8.8.8"
-  network = "https"
+  network = "tls"
   tls-host = "dns.google"
 
   [upstreams.cloudflare]

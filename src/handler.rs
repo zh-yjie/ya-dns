@@ -134,9 +134,8 @@ impl Handler {
                         response_code,
                         trusted: _,
                     } => (soa.clone(), *response_code),
-                    _ => (*Box::new(None), ResponseCode::NoError),
+                    _ => (*Box::new(None), ResponseCode::ServFail),
                 };
-                //let mut header = Header::new();
                 header.set_response_code(response_code);
                 let soa = &match soa {
                     Some(soa) => vec![soa.as_ref().to_owned().into_record_of_rdata()],

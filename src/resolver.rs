@@ -37,6 +37,7 @@ pub fn tcp_resolver(address: &SocketAddr) -> RecursiveResolver {
     RecursiveResolver::new(resolver_config)
 }
 
+#[cfg(feature = "dns-over-tls")]
 pub fn tls_resolver(address: &SocketAddr, tls_host: &String) -> RecursiveResolver {
     let mut resolver_config = ResolverConfig::new();
     let mut name_server_config = NameServerConfig::new(*address, Protocol::Tls);

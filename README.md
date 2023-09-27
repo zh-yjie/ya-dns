@@ -14,10 +14,11 @@ Prebuilt releases are available [here](https://github.com/zh-yjie/ya-dns/release
 * UDP
 * TCP
 * DNS over TLS (DoT)
-* DNS over HTTPS (DoH)
+* DNS over HTTPS (DoH) *(mips not support)*
 * Rule based forwarding
 * Rule based response filtering
 * Parallel forwarding
+* Regex matching
   
 ## Usage
 
@@ -35,7 +36,7 @@ If you ignore `-c`, it will load `config.toml`.
 
 * [ChinaDNS](examples/chinadns.toml) (Users in China should prefer this.)
 
-* [Domain rule based chinaDNS](examples/chinadns-domain.toml) (Users in China should prefer this.)
+* [ChinaDNS domain](examples/chinadns-domain.toml) (Use direct and proxy domain list for ChinaDns.)
 
 * [OpenNIC](examples/opennic.toml) (Use OpenNIC DNS for OpenNIC domains and Google DNS for the others.)
 

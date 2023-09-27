@@ -6,13 +6,17 @@ edition = "2021"
 
 [features]
 default = ["default-rustls"]
+
+default-tcp_udp = []
 default-rustls = ["dns-over-tls", "dns-over-https"]
 default-openssl = ["dns-over-tls", "openssl"]
+
 dns-over-tls = ["trust-dns-resolver"]
 dns-over-https = ["trust-dns-resolver"]
 
 [dependencies]
 trust-dns-proto = "0.23.0"
+trust-dns-resolver = { version = "0.23.0", default-features = false, features = ["tokio-runtime"] }
 trust-dns-server = "0.23.0"
 tokio = "1.32.0"
 slog = "2.7.0"
