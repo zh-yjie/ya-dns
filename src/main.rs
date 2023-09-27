@@ -11,6 +11,7 @@ use slog::{o, Drain, Logger};
 use std::fmt::Display;
 use std::fs::File;
 use std::io::prelude::*;
+use std::net::SocketAddr;
 use std::process::exit;
 use std::time::Duration;
 use tokio;
@@ -26,17 +27,28 @@ mod ip;
 mod option;
 mod resolver;
 
+struct MainConfig {
+    pub bind: SocketAddr,
+    pub app_config: AppConfig,
+}
+
 lazy_static! {
     static ref STDOUT: Logger = stdout_logger();
     static ref STDERR: Logger = stderr_logger();
-    static ref APPCONFIG: AppConfig = AppConfig::new(config().unwrap_or_log());
+    static ref CONFIG: MainConfig = {
+        let config = config().unwrap_or_log();
+        MainConfig {
+            bind: config.bind,
+            app_config: AppConfig::new(config),
+        }
+    };
 }
 
 const TCP_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let bind_socket = APPCONFIG.bind.as_ref();
+    let bind_socket = CONFIG.bind;
     let request_handler = Handler::new();
     let mut server = ServerFuture::new(request_handler);
 

@@ -1,4 +1,4 @@
-use crate::{config::RuleAction, filter, APPCONFIG, STDERR};
+use crate::{config::RuleAction, filter, CONFIG, STDERR};
 use async_recursion::async_recursion;
 use futures::{
     future::{self, MapErr, MapOk},
@@ -57,7 +57,7 @@ impl Handler {
                 let query_type = request.query().query_type().to_owned();
                 let name1 = name.to_owned();
                 let name2 = name.to_owned();
-                let rs = APPCONFIG.resolvers.get(name);
+                let rs = CONFIG.app_config.resolvers.get(name);
                 rs.unwrap()
                     .resolve(domain1, query_type)
                     .boxed()

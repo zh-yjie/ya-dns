@@ -6,12 +6,10 @@ use crate::resolver;
 use crate::resolver::RecursiveResolver;
 use regex::RegexSet;
 use std::collections::HashMap;
-use std::net::SocketAddr;
 use std::sync::Arc;
 
 #[derive(Clone, Debug)]
 pub struct AppConfig {
-    pub bind: Arc<SocketAddr>,
     pub defaults: Arc<Vec<String>>,
     pub resolvers: Arc<HashMap<String, Arc<RecursiveResolver>>>,
     pub domains: Arc<HashMap<String, Domains>>,
@@ -70,7 +68,6 @@ impl AppConfig {
             .collect();
 
         AppConfig {
-            bind: Arc::new(config.bind),
             defaults: Arc::new(config.default_upstreams),
             resolvers: Arc::new(resolvers),
             domains: Arc::new(domains),

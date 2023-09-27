@@ -1,6 +1,6 @@
 use crate::{
     config::{RequestRule, ResponseRule, RuleAction},
-    APPCONFIG, STDERR,
+    CONFIG, STDERR,
 };
 use slog::debug;
 use trust_dns_proto::{op::LowerQuery, rr::RecordType};
@@ -31,7 +31,7 @@ pub fn check_response(domain: &str, upstream_name: &str, resp: &Lookup) -> RuleA
                     let toggle = (range_pattern.len() - range_name.len()) % 2 == 1;
 
                     // See if the range contains the IP
-                    let range = APPCONFIG.ranges.get(range_name);
+                    let range = CONFIG.app_config.ranges.get(range_name);
                     range
                         .map(|range| {
                             answers
@@ -57,7 +57,8 @@ pub fn check_response(domain: &str, upstream_name: &str, resp: &Lookup) -> RuleA
             .unwrap_or(true) // No ranges field means matching all ranges
     };
 
-    APPCONFIG
+    CONFIG
+        .app_config
         .response_rules
         .iter()
         .find(|rule| {
@@ -77,7 +78,8 @@ pub fn resolvers(query: &LowerQuery) -> Vec<&str> {
             .unwrap_or(true)
     };
 
-    let rule = APPCONFIG
+    let rule = CONFIG
+        .app_config
         .request_rules
         .iter()
         .find(|r| check_domains(&name, &r.domains) && check_type(r));
@@ -88,7 +90,12 @@ pub fn resolvers(query: &LowerQuery) -> Vec<&str> {
     } else {
         debug!(STDERR, "No rule matches for {}. Use defaults.", name);
         // If no rule matches, use defaults
-        APPCONFIG.defaults.iter().map(String::as_str).collect()
+        CONFIG
+            .app_config
+            .defaults
+            .iter()
+            .map(String::as_str)
+            .collect()
     }
 }
 
@@ -101,7 +108,7 @@ fn check_domains(domain: &str, domains: &Option<Vec<String>>) -> bool {
                 // Process the leading `!`
                 let domains_tag = domains_pattern.trim_start_matches('!');
                 let toggle = (domains_pattern.len() - domains_tag.len()) % 2 == 1;
-                let domains = APPCONFIG.domains.get(domains_tag);
+                let domains = CONFIG.app_config.domains.get(domains_tag);
                 domains
                     .map(|domains| {
                         (domains.regex_set.is_match(&name) || domains.suffix.contains(&name))
