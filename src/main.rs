@@ -44,13 +44,10 @@ lazy_static! {
     };
 }
 
-const TCP_TIMEOUT: Duration = Duration::from_secs(10);
-
 #[tokio::main]
 async fn main() -> Result<()> {
     let bind_socket = CONFIG.bind;
-    let request_handler = Handler::new();
-    let mut server = ServerFuture::new(request_handler);
+    let mut server = ServerFuture::new(Handler::default());
 
     let bind = UdpSocket::bind(bind_socket);
     info!(STDOUT, "Listening on UDP: {}", bind_socket);
@@ -58,7 +55,7 @@ async fn main() -> Result<()> {
 
     let bind = TcpListener::bind(bind_socket);
     info!(STDOUT, "Listening on TCP: {}", bind_socket);
-    server.register_listener(bind.await?, TCP_TIMEOUT);
+    server.register_listener(bind.await?, Duration::from_secs(10));
 
     server.block_until_done().await?;
 

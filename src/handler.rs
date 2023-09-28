@@ -1,4 +1,5 @@
 use crate::{config::RuleAction, filter, CONFIG, STDERR};
+use anyhow::Error;
 use async_recursion::async_recursion;
 use futures::{
     future::{self, MapErr, MapOk},
@@ -17,16 +18,6 @@ use trust_dns_server::{
     server::{Request, RequestHandler, ResponseHandler, ResponseInfo},
 };
 
-#[derive(thiserror::Error, Debug)]
-pub enum Error {
-    #[error("Invalid OpCode {0:}")]
-    InvalidOpCode(OpCode),
-    #[error("Invalid MessageType {0:}")]
-    InvalidMessageType(MessageType),
-    #[error("IO error: {0:}")]
-    Io(#[from] std::io::Error),
-}
-
 /// DNS Request Handler
 #[derive(Clone)]
 pub struct Handler {
@@ -34,8 +25,8 @@ pub struct Handler {
 }
 
 impl Handler {
-    /// Create new handler from command-line options.
-    pub fn new() -> Self {
+    /// Create default handler.
+    pub fn default() -> Self {
         Handler {
             // counter: Arc::new(AtomicU64::new(0)),
         }
@@ -151,22 +142,22 @@ impl Handler {
     async fn do_handle_request<R: ResponseHandler>(
         &self,
         request: &Request,
-        response: R,
+        mut response: R,
     ) -> Result<ResponseInfo, Error> {
         debug!(
             STDERR,
             "DNS requests are forwarded to [{}].",
             request.query()
         );
-        // make sure the request is a query
-        if request.op_code() != OpCode::Query {
-            return Err(Error::InvalidOpCode(request.op_code()));
+        // make sure the request is a query and the message type is a query
+        if request.op_code() != OpCode::Query || request.message_type() != MessageType::Query {
+            let builder = MessageResponseBuilder::from_message_request(request);
+            let mut header = Header::response_from_request(request.header());
+            header.set_response_code(ResponseCode::Refused);
+            let res = builder.build_no_records(header);
+            return Ok(response.send_response(res).await?);
         }
 
-        // make sure the message type is a query
-        if request.message_type() != MessageType::Query {
-            return Err(Error::InvalidMessageType(request.message_type()));
-        }
         self.do_handle_request_default(request, response).await
     }
 }
