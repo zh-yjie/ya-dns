@@ -1,12 +1,18 @@
 use crate::{
     config::{RequestRule, ResponseRule, RuleAction},
-    CONFIG, STDERR,
+    handler_config::HandlerConfig,
+    loger::STDERR,
 };
 use slog::debug;
 use trust_dns_proto::{op::LowerQuery, rr::RecordType};
 use trust_dns_resolver::lookup::Lookup;
 
-pub fn check_response(domain: &str, upstream_name: &str, resp: &Lookup) -> RuleAction {
+pub fn check_response(
+    cfg: &HandlerConfig,
+    domain: &str,
+    upstream_name: &str,
+    resp: &Lookup,
+) -> RuleAction {
     let answers = resp.records();
 
     // Drop empty response
@@ -31,7 +37,7 @@ pub fn check_response(domain: &str, upstream_name: &str, resp: &Lookup) -> RuleA
                     let toggle = (range_pattern.len() - range_name.len()) % 2 == 1;
 
                     // See if the range contains the IP
-                    let range = CONFIG.app_config.ranges.get(range_name);
+                    let range = cfg.ranges.get(range_name);
                     range
                         .map(|range| {
                             answers
@@ -57,18 +63,16 @@ pub fn check_response(domain: &str, upstream_name: &str, resp: &Lookup) -> RuleA
             .unwrap_or(true) // No ranges field means matching all ranges
     };
 
-    CONFIG
-        .app_config
-        .response_rules
+    cfg.response_rules
         .iter()
         .find(|rule| {
-            check_upstream(rule) && check_ranges(rule) && check_domains(domain, &rule.domains)
+            check_upstream(rule) && check_ranges(rule) && check_domains(cfg, domain, &rule.domains)
         })
         .map(|rule| rule.action)
         .unwrap_or(RuleAction::Accept)
 }
 
-pub fn resolvers(query: &LowerQuery) -> Vec<&str> {
+pub fn resolvers<'a>(cfg: &'a HandlerConfig, query: &LowerQuery) -> Vec<&'a str> {
     let name = query.name().to_string();
 
     let check_type = |rule: &RequestRule| {
@@ -78,11 +82,10 @@ pub fn resolvers(query: &LowerQuery) -> Vec<&str> {
             .unwrap_or(true)
     };
 
-    let rule = CONFIG
-        .app_config
+    let rule = cfg
         .request_rules
         .iter()
-        .find(|r| check_domains(&name, &r.domains) && check_type(r));
+        .find(|r| check_domains(cfg, &name, &r.domains) && check_type(r));
 
     if let Some(rule) = rule {
         debug!(STDERR, "Query {} matches rule {:?}", name, rule);
@@ -90,16 +93,11 @@ pub fn resolvers(query: &LowerQuery) -> Vec<&str> {
     } else {
         debug!(STDERR, "No rule matches for {}. Use defaults.", name);
         // If no rule matches, use defaults
-        CONFIG
-            .app_config
-            .defaults
-            .iter()
-            .map(String::as_str)
-            .collect()
+        cfg.defaults.iter().map(String::as_str).collect()
     }
 }
 
-fn check_domains(domain: &str, domains: &Option<Vec<String>>) -> bool {
+fn check_domains(cfg: &HandlerConfig, domain: &str, domains: &Option<Vec<String>>) -> bool {
     let name = domain.trim_end_matches(".");
     domains
         .as_ref()
@@ -108,7 +106,7 @@ fn check_domains(domain: &str, domains: &Option<Vec<String>>) -> bool {
                 // Process the leading `!`
                 let domains_tag = domains_pattern.trim_start_matches('!');
                 let toggle = (domains_pattern.len() - domains_tag.len()) % 2 == 1;
-                let domains = CONFIG.app_config.domains.get(domains_tag);
+                let domains = cfg.domains.get(domains_tag);
                 domains
                     .map(|domains| {
                         (domains.regex_set.is_match(&name) || domains.suffix.contains(&name))

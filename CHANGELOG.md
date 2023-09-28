@@ -1,11 +1,15 @@
+# 0.3.1
+
+* Optimize memory usage
+
 # 0.2.0
 
 * add response soa record
-* fixed bugs
+* fix bugs
 
 # 0.1.1
 
-* fixed mips build error
+* fix mips build error
 
 # 0.1.0
 

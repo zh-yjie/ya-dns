@@ -1,5 +1,4 @@
 use crate::ip::IpRange;
-use crate::Transpose;
 use failure::{err_msg, Error};
 use ipnet::IpNet;
 use serde_derive::Deserialize;
@@ -314,4 +313,21 @@ pub enum RuleAction {
     Accept,
     #[serde(rename = "drop")]
     Drop,
+}
+
+trait Transpose {
+    type Output;
+    fn transpose(self) -> Self::Output;
+}
+
+impl<T, E> Transpose for Option<Result<T, E>> {
+    type Output = Result<Option<T>, E>;
+
+    fn transpose(self) -> Self::Output {
+        match self {
+            Some(Ok(x)) => Ok(Some(x)),
+            Some(Err(e)) => Err(e),
+            None => Ok(None),
+        }
+    }
 }

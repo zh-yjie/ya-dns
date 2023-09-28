@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 #[derive(Clone, Debug)]
-pub struct AppConfig {
+pub struct HandlerConfig {
     pub defaults: Arc<Vec<String>>,
     pub resolvers: Arc<HashMap<String, Arc<RecursiveResolver>>>,
     pub domains: Arc<HashMap<String, Domains>>,
@@ -24,8 +24,8 @@ pub struct Domains {
     pub suffix: DomainSuffix,
 }
 
-impl AppConfig {
-    pub fn new(config: Config) -> Self {
+impl From<Config> for HandlerConfig {
+    fn from(config: Config) -> Self {
         // debug!(STDERR, "{:#?}", config);
         let resolvers: HashMap<_, _> = config
             .upstreams
@@ -67,7 +67,7 @@ impl AppConfig {
             })
             .collect();
 
-        AppConfig {
+        HandlerConfig {
             defaults: Arc::new(config.default_upstreams),
             resolvers: Arc::new(resolvers),
             domains: Arc::new(domains),

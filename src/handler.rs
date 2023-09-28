@@ -1,10 +1,11 @@
-use crate::{config::RuleAction, filter, CONFIG, STDERR};
+use crate::{config::RuleAction, filter, handler_config::HandlerConfig, loger::STDERR};
 use anyhow::Error;
 use async_recursion::async_recursion;
 use futures::{
     future::{self, MapErr, MapOk},
     Future, FutureExt, TryFutureExt,
 };
+use once_cell::sync::OnceCell;
 use slog::{debug, error};
 use std::pin::Pin;
 use trust_dns_proto::op::Query;
@@ -18,17 +19,27 @@ use trust_dns_server::{
     server::{Request, RequestHandler, ResponseHandler, ResponseInfo},
 };
 
+static HANDLER_CONFIG: OnceCell<HandlerConfig> = OnceCell::new();
+
+fn handler_config() -> &'static HandlerConfig {
+    HANDLER_CONFIG
+        .get()
+        .expect("HandlerConfig is not initialized")
+}
+
 /// DNS Request Handler
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Handler {
     //pub counter: Arc<AtomicU64>,
 }
 
 impl Handler {
-    /// Create default handler.
-    pub fn default() -> Self {
-        Handler {
-            // counter: Arc::new(AtomicU64::new(0)),
+    /// Create handler from app config.
+    pub fn new(cfg: HandlerConfig) -> Self {
+        match HANDLER_CONFIG.set(cfg) {
+            _ => Handler {
+                // counter: Arc::new(AtomicU64::new(0)),
+            },
         }
     }
 
@@ -39,7 +50,7 @@ impl Handler {
         mut responder: R,
     ) -> Result<ResponseInfo, Error> {
         //self.counter.fetch_add(1, Ordering::SeqCst);
-        let resolvers = filter::resolvers(request.query());
+        let resolvers = filter::resolvers(handler_config(), request.query());
         let tasks: Vec<_> = resolvers
             .into_iter()
             .map(|name| {
@@ -48,7 +59,7 @@ impl Handler {
                 let query_type = request.query().query_type().to_owned();
                 let name1 = name.to_owned();
                 let name2 = name.to_owned();
-                let rs = CONFIG.app_config.resolvers.get(name);
+                let rs = handler_config().resolvers.get(name);
                 rs.unwrap()
                     .resolve(domain1, query_type)
                     .boxed()
@@ -89,7 +100,7 @@ impl Handler {
                 match future::select_all(tasks).await {
                     (Ok((domain, name, resp)), _index, remaining) => {
                         //debug!(STDERR, "DNS {} result {:?}", name, resp);
-                        match filter::check_response(&domain, &name, &resp) {
+                        match filter::check_response(handler_config(), &domain, &name, &resp) {
                             RuleAction::Accept => {
                                 // Ignore the remaining future
                                 tokio::spawn(future::join_all(remaining).map(|_| ()));
