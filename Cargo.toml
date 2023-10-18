@@ -1,6 +1,6 @@
 [package]
 name = "yadns"
-version = "0.3.1"
+version = "0.3.5"
 authors = ["zyj"]
 edition = "2021"
 
@@ -11,39 +11,39 @@ default-tcp_udp = []
 default-rustls = ["dns-over-tls", "dns-over-https"]
 default-openssl = ["dns-over-tls", "openssl"]
 
-dns-over-tls = ["trust-dns-resolver"]
-dns-over-https = ["trust-dns-resolver"]
+dns-over-tls = ["hickory-resolver"]
+dns-over-https = ["hickory-resolver"]
 
 [dependencies]
-trust-dns-proto = "0.23.0"
-trust-dns-resolver = { version = "0.23.0", default-features = false, features = ["tokio-runtime"] }
-trust-dns-server = "0.23.0"
-tokio = "1.32.0"
-slog = "2.7.0"
-slog-term = "2.9.0"
-slog-async = "2.8.0"
-lazy_static = "1.4.0"
-iprange = "0.6.7"
-ipnet = "2.8.0"
-failure = "0.1.8"
-clap = { version = "4.4.0", features = ["derive"] }
-toml = "0.7.8"
-serde = "1.0.188"
-serde_derive = "1.0.188"
-regex = "1.9.5"
-async-trait = "0.1.73"
 anyhow = "1.0.75"
-futures = "0.3.28"
 async-recursion = "1.0.5"
-publicsuffix = "2.2.3"
+async-trait = "0.1.74"
+clap = { version = "4.4.6", features = ["derive"] }
+failure = "0.1.8"
+futures = "0.3.28"
+hickory-proto = "0.24.0"
+hickory-resolver = { version = "0.24.0", default-features = false, features = ["tokio-runtime"] }
+hickory-server = "0.24.0"
+ipnet = "2.8.0"
+iprange = "0.6.7"
+lazy_static = "1.4.0"
 once_cell = "1.18.0"
+publicsuffix = "2.2.3"
+regex = "1.10.2"
+serde = "1.0.189"
+serde_derive = "1.0.189"
+slog = "2.7.0"
+slog-async = "2.8.0"
+slog-term = "2.9.0"
+tokio = "1.33.0"
+toml = "0.7.8"
 
 [target.'cfg(any(target_arch = "mips", target_arch = "mips64"))'.dependencies]
-trust-dns-resolver = { version = "0.23.0", default-features = false, features = ["dns-over-openssl"], optional = true }
+hickory-resolver = { version = "0.24.0", default-features = false, features = ["dns-over-openssl"], optional = true }
 openssl = { version = "0.10", features = ["vendored"], optional = true }
 
 [target.'cfg(not(any(target_arch = "mips", target_arch = "mips64")))'.dependencies]
-trust-dns-resolver = { version = "0.23.0", default-features = false, features = ["dns-over-https-rustls"], optional = true }
+hickory-resolver = { version = "0.24.0", default-features = false, features = ["dns-over-https-rustls"], optional = true }
 
 [profile.release]
 opt-level = 3

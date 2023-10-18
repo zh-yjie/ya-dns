@@ -4,8 +4,8 @@ use crate::{
     loger::STDERR,
 };
 use slog::debug;
-use trust_dns_proto::{op::LowerQuery, rr::RecordType};
-use trust_dns_resolver::lookup::Lookup;
+use hickory_proto::{op::LowerQuery, rr::RecordType};
+use hickory_resolver::lookup::Lookup;
 
 pub fn check_response(
     cfg: &HandlerConfig,

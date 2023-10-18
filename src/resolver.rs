@@ -1,9 +1,9 @@
 use std::net::SocketAddr;
-use trust_dns_proto::rr::RecordType;
-use trust_dns_resolver::config::{NameServerConfig, Protocol, ResolverConfig, ResolverOpts};
-use trust_dns_resolver::error::ResolveError;
-use trust_dns_resolver::lookup::Lookup;
-use trust_dns_resolver::TokioAsyncResolver;
+use hickory_proto::rr::RecordType;
+use hickory_resolver::config::{NameServerConfig, Protocol, ResolverConfig, ResolverOpts};
+use hickory_resolver::error::ResolveError;
+use hickory_resolver::lookup::Lookup;
+use hickory_resolver::TokioAsyncResolver;
 
 #[derive(Clone, Debug)]
 pub struct RecursiveResolver {

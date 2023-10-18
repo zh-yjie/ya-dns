@@ -13,7 +13,7 @@ use std::process::exit;
 use std::time::Duration;
 use tokio;
 use tokio::net::{TcpListener, UdpSocket};
-use trust_dns_server::ServerFuture;
+use hickory_server::ServerFuture;
 
 mod config;
 mod domain;

@@ -1,5 +1,6 @@
 use crate::ip::IpRange;
 use failure::{err_msg, Error};
+use hickory_proto::rr::RecordType;
 use ipnet::IpNet;
 use serde_derive::Deserialize;
 use std::collections::HashMap;
@@ -9,7 +10,6 @@ use std::io::BufReader;
 use std::net::IpAddr;
 use std::net::SocketAddr;
 use std::str::FromStr;
-use trust_dns_proto::rr::record_type::RecordType;
 
 #[derive(Debug)]
 pub struct Config {

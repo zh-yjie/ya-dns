@@ -8,12 +8,12 @@ use futures::{
 use once_cell::sync::OnceCell;
 use slog::{debug, error};
 use std::pin::Pin;
-use trust_dns_proto::op::Query;
-use trust_dns_resolver::{
+use hickory_proto::op::Query;
+use hickory_resolver::{
     error::{ResolveError, ResolveErrorKind},
     lookup::Lookup,
 };
-use trust_dns_server::{
+use hickory_server::{
     authority::MessageResponseBuilder,
     proto::op::{Header, MessageType, OpCode, ResponseCode},
     server::{Request, RequestHandler, ResponseHandler, ResponseInfo},

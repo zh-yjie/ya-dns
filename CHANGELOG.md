@@ -1,3 +1,7 @@
+# 0.3.5
+
+* update trust dns to hickory dns
+
 # 0.3.1
 
 * Optimize memory usage
