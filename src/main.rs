@@ -1,9 +1,10 @@
 use crate::config::{Config, ConfigBuilder};
 use crate::handler::Handler;
-use crate::loger::{STDERR, STDOUT};
+use crate::logger::{STDERR, STDOUT};
 use anyhow::Result;
 use clap::Parser;
 use failure::Error;
+use hickory_server::ServerFuture;
 use option::Args;
 use slog::{crit, debug, info};
 use std::fmt::Display;
@@ -13,7 +14,6 @@ use std::process::exit;
 use std::time::Duration;
 use tokio;
 use tokio::net::{TcpListener, UdpSocket};
-use hickory_server::ServerFuture;
 
 mod config;
 mod domain;
@@ -21,7 +21,7 @@ mod filter;
 mod handler;
 mod handler_config;
 mod ip;
-mod loger;
+mod logger;
 mod option;
 mod resolver;
 

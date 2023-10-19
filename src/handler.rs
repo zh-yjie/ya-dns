@@ -1,13 +1,10 @@
-use crate::{config::RuleAction, filter, handler_config::HandlerConfig, loger::STDERR};
+use crate::{config::RuleAction, filter, handler_config::HandlerConfig, logger::STDERR};
 use anyhow::Error;
 use async_recursion::async_recursion;
 use futures::{
     future::{self, MapErr, MapOk},
     Future, FutureExt, TryFutureExt,
 };
-use once_cell::sync::OnceCell;
-use slog::{debug, error};
-use std::pin::Pin;
 use hickory_proto::op::Query;
 use hickory_resolver::{
     error::{ResolveError, ResolveErrorKind},
@@ -18,6 +15,9 @@ use hickory_server::{
     proto::op::{Header, MessageType, OpCode, ResponseCode},
     server::{Request, RequestHandler, ResponseHandler, ResponseInfo},
 };
+use once_cell::sync::OnceCell;
+use slog::{debug, error};
+use std::pin::Pin;
 
 static HANDLER_CONFIG: OnceCell<HandlerConfig> = OnceCell::new();
 

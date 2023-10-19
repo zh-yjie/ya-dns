@@ -1,11 +1,11 @@
 use crate::{
     config::{RequestRule, ResponseRule, RuleAction},
     handler_config::HandlerConfig,
-    loger::STDERR,
+    logger::STDERR,
 };
-use slog::debug;
 use hickory_proto::{op::LowerQuery, rr::RecordType};
 use hickory_resolver::lookup::Lookup;
+use slog::debug;
 
 pub fn check_response(
     cfg: &HandlerConfig,
