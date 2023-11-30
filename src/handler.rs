@@ -1,6 +1,6 @@
-use crate::{config::RuleAction, filter, handler_config::HandlerConfig, logger::STDERR};
-use anyhow::Error;
+use crate::{config::RuleAction, filter, handler_config::HandlerConfig, logger::stderr};
 use async_recursion::async_recursion;
+use failure::Error;
 use futures::{
     future::{self, MapErr, MapOk},
     Future, FutureExt, TryFutureExt,
@@ -104,14 +104,14 @@ impl Handler {
                             RuleAction::Accept => {
                                 // Ignore the remaining future
                                 tokio::spawn(future::join_all(remaining).map(|_| ()));
-                                debug!(STDERR, "Use result from {}", name);
+                                debug!(stderr(), "Use result from {}", name);
                                 Ok(resp)
                             }
                             RuleAction::Drop => process_all(handler, None, remaining).await,
                         }
                     }
                     (Err((name, e)), _index, remaining) => {
-                        error!(STDERR, "{}: {}", name, e);
+                        error!(stderr(), "{}: {}", name, e);
                         process_all(handler, Some(e), remaining).await
                     }
                 }
@@ -156,7 +156,7 @@ impl Handler {
         mut response: R,
     ) -> Result<ResponseInfo, Error> {
         debug!(
-            STDERR,
+            stderr(),
             "DNS requests are forwarded to [{}].",
             request.query()
         );
@@ -184,7 +184,7 @@ impl RequestHandler for Handler {
         match self.do_handle_request(request, response).await {
             Ok(info) => info,
             Err(e) => {
-                debug!(STDERR, "Error in RequestHandler:{:#?}", e);
+                debug!(stderr(), "Error in RequestHandler:{:#?}", e);
                 let mut header = Header::new();
                 header.set_response_code(ResponseCode::ServFail);
                 header.into()

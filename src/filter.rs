@@ -1,7 +1,7 @@
 use crate::{
     config::{RequestRule, ResponseRule, RuleAction},
     handler_config::HandlerConfig,
-    logger::STDERR,
+    logger::stderr,
 };
 use hickory_proto::{op::LowerQuery, rr::RecordType};
 use hickory_resolver::lookup::Lookup;
@@ -88,10 +88,10 @@ pub fn resolvers<'a>(cfg: &'a HandlerConfig, query: &LowerQuery) -> Vec<&'a str>
         .find(|r| check_domains(cfg, &name, &r.domains) && check_type(r));
 
     if let Some(rule) = rule {
-        debug!(STDERR, "Query {} matches rule {:?}", name, rule);
+        debug!(stderr(), "Query {} matches rule {:?}", name, rule);
         rule.upstreams.iter().map(String::as_str).collect()
     } else {
-        debug!(STDERR, "No rule matches for {}. Use defaults.", name);
+        debug!(stderr(), "No rule matches for {}. Use defaults.", name);
         // If no rule matches, use defaults
         cfg.defaults.iter().map(String::as_str).collect()
     }

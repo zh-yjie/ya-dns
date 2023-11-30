@@ -1,7 +1,6 @@
 use crate::config::{Config, ConfigBuilder};
 use crate::handler::Handler;
-use crate::logger::{STDERR, STDOUT};
-use anyhow::Result;
+use crate::logger::{stderr, stdout};
 use clap::Parser;
 use failure::Error;
 use hickory_server::ServerFuture;
@@ -26,22 +25,20 @@ mod option;
 mod resolver;
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() {
     let config = config().unwrap_or_log();
     let bind_socket = config.bind;
     let mut server = ServerFuture::new(Handler::new(config.into()));
 
     let bind = UdpSocket::bind(bind_socket);
-    info!(STDOUT, "Listening on UDP: {}", bind_socket);
-    server.register_socket(bind.await?);
+    info!(stdout(), "Listening on UDP: {}", bind_socket);
+    server.register_socket(bind.await.unwrap());
 
     let bind = TcpListener::bind(bind_socket);
-    info!(STDOUT, "Listening on TCP: {}", bind_socket);
-    server.register_listener(bind.await?, Duration::from_secs(10));
+    info!(stdout(), "Listening on TCP: {}", bind_socket);
+    server.register_listener(bind.await.unwrap(), Duration::from_secs(10));
 
-    server.block_until_done().await?;
-
-    Ok(())
+    server.block_until_done().await.unwrap();
 }
 
 fn config() -> Result<Config, Error> {
@@ -72,8 +69,8 @@ where
     fn unwrap_or_log(self) -> T {
         self.unwrap_or_else(|e| {
             let e: Error = e.into();
-            crit!(STDERR, "{}", e);
-            debug!(STDERR, "{:?}", e.backtrace());
+            crit!(stderr(), "{}", e);
+            debug!(stderr(), "{:?}", e.backtrace());
             exit(1);
         })
     }
@@ -81,8 +78,8 @@ where
     fn unwrap_or_log_with<D: Display>(self, description: D) -> T {
         self.unwrap_or_else(|e| {
             let e: Error = e.into();
-            crit!(STDERR, "{}: {}", description, e);
-            debug!(STDERR, "{:?}", e.backtrace());
+            crit!(stderr(), "{}: {}", description, e);
+            debug!(stderr(), "{:?}", e.backtrace());
             exit(1);
         })
     }

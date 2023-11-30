@@ -1,4 +1,4 @@
-use anyhow::Error;
+use failure::Error;
 use publicsuffix::{List, Psl};
 use std::str::FromStr;
 

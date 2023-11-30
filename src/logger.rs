@@ -1,9 +1,21 @@
-use lazy_static::lazy_static;
+use once_cell::sync::OnceCell;
 use slog::{o, Drain, Logger};
 
-lazy_static! {
-    pub static ref STDOUT: Logger = stdout_logger();
-    pub static ref STDERR: Logger = stderr_logger();
+static STDOUT: OnceCell<Logger> = OnceCell::new();
+static STDERR: OnceCell<Logger> = OnceCell::new();
+
+pub fn stdout() -> &'static Logger {
+    STDOUT.get().unwrap_or_else(|| {
+        STDOUT.set(stdout_logger()).unwrap();
+        STDOUT.get().unwrap()
+    })
+}
+
+pub fn stderr() -> &'static Logger {
+    STDERR.get().unwrap_or_else(|| {
+        STDERR.set(stderr_logger()).unwrap();
+        STDERR.get().unwrap()
+    })
 }
 
 fn stdout_logger() -> Logger {
