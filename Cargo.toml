@@ -34,7 +34,7 @@ slog = "2"
 slog-async = "2"
 slog-term = "2"
 tokio = "1"
-toml = "0.7"
+toml = "0.8"
 
 [target.'cfg(any(target_arch = "mips", target_arch = "mips64"))'.dependencies]
 hickory-resolver = { version = "0.24", default-features = false, features = ["dns-over-openssl"], optional = true }
