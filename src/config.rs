@@ -18,6 +18,7 @@ pub enum ConfigError {
     NoUpstream,
     #[error("Invalid address: {0}")]
     InvalidAddress(String),
+    #[cfg(any(feature = "dns-over-tls", feature = "dns-over-https"))]
     #[error("tls-host is missing")]
     NoTlsHost,
 }
