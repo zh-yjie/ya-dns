@@ -1,6 +1,5 @@
-use failure::Error;
 use publicsuffix::{List, Psl};
-use std::str::FromStr;
+use std::{io, str::FromStr};
 
 #[derive(Clone, Debug)]
 pub struct DomainSuffix {
@@ -15,7 +14,7 @@ impl DomainSuffix {
 }
 
 impl FromStr for DomainSuffix {
-    type Err = Error;
+    type Err = io::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let list = match s.parse() {

@@ -1,6 +1,5 @@
 use crate::{config::RuleAction, filter, handler_config::HandlerConfig, logger::stderr};
 use async_recursion::async_recursion;
-use failure::Error;
 use futures::{
     future::{self, MapErr, MapOk},
     Future, FutureExt, TryFutureExt,
@@ -48,7 +47,7 @@ impl Handler {
         &self,
         request: &Request,
         mut responder: R,
-    ) -> Result<ResponseInfo, Error> {
+    ) -> Result<ResponseInfo, ResolveError> {
         //self.counter.fetch_add(1, Ordering::SeqCst);
         let resolvers = filter::resolvers(handler_config(), request.query());
         let tasks: Vec<_> = resolvers
@@ -154,7 +153,7 @@ impl Handler {
         &self,
         request: &Request,
         mut response: R,
-    ) -> Result<ResponseInfo, Error> {
+    ) -> Result<ResponseInfo, ResolveError> {
         debug!(
             stderr(),
             "DNS requests are forwarded to [{}].",

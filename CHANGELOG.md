@@ -1,21 +1,24 @@
+# 0.3.7
+
+- replace failure with thiserror
+
 # 0.3.5
 
-* update trust dns to hickory dns
+- update trust dns to hickory dns
 
 # 0.3.1
 
-* Optimize memory usage
+- Optimize memory usage
 
 # 0.2.0
 
-* add response soa record
-* fix bugs
+- add response soa record
+- fix bugs
 
 # 0.1.1
 
-* fix mips build error
+- fix mips build error
 
 # 0.1.0
 
-* First version
-
+- First version
