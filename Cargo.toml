@@ -1,31 +1,37 @@
 [package]
-name = "yadns"
-version = "0.3.7"
 authors = ["zyj"]
 edition = "2021"
+name = "yadns"
+version = "0.3.8"
 
 [features]
 default = ["default-rustls"]
 
-default-tcp_udp = []
-default-rustls = ["dns-over-tls", "dns-over-https", "hickory-resolver/dns-over-rustls", "hickory-resolver/dns-over-https-rustls"]
 default-openssl = ["dns-over-tls", "hickory-resolver/dns-over-openssl", "openssl"]
+default-rustls = [
+  "dns-over-tls",
+  "dns-over-https",
+  "hickory-resolver/dns-over-rustls",
+  "hickory-resolver/dns-over-https-rustls",
+  "hickory-resolver/webpki-roots",
+]
+default-tcp_udp = []
 
-dns-over-tls = []
 dns-over-https = []
+dns-over-tls = []
 
 [dependencies]
 async-recursion = "1"
 async-trait = "0.1"
-clap = { version = "4", features = ["derive"] }
-futures = { version = "0.3", default-features = false }
+clap = {version = "4", features = ["derive"]}
+futures = {version = "0.3", default-features = false}
 hickory-proto = "0.24"
-hickory-resolver = { version = "0.24", default-features = false, features = ["tokio-runtime"] }
+hickory-resolver = {version = "0.24", default-features = false, features = ["tokio-runtime"]}
 hickory-server = "0.24"
 ipnet = "2"
 iprange = "0.6"
 once_cell = "1"
-openssl = { version = "0.10", features = ["vendored"], optional = true }
+openssl = {version = "0.10", features = ["vendored"], optional = true}
 publicsuffix = "2"
 regex = "1"
 serde = "1"
@@ -38,8 +44,8 @@ tokio = "1"
 toml = "0.8"
 
 [profile.release]
-opt-level = 3
 lto = true
+opt-level = 3
 # codegen-units = 1
 panic = "abort"
 strip = "symbols"

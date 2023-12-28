@@ -1,3 +1,7 @@
+# 0.3.8
+
+- fix DoT and DoH error
+
 # 0.3.7
 
 - replace failure with thiserror
