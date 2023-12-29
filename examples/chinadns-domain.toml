@@ -1,48 +1,63 @@
 bind = "127.0.0.1:5300"
 
 [upstreams]
-  [upstreams.dnspod]
-  address = "119.29.29.29"
-  network = "udp"
+[upstreams.dnspod]
+address = "119.29.29.29"
+network = "udp"
 
-  [upstreams.alidns]
-  address = "223.5.5.5"
-  network = "udp"
+[upstreams.alidns]
+address = "223.5.5.5"
+network = "udp"
 
-  [upstreams.google]
-  address = "8.8.8.8"
-  network = "tls"
-  tls-host = "dns.google"
+[upstreams.google]
+address = "8.8.8.8"
+network = "tls"
+proxy = "socks5://127.0.0.1:1080"
+tls-host = "dns.google"
 
-  [upstreams.cloudflare]
-  address = "1.1.1.1"
-  network = "tls"
-  tls-host = "cloudflare-dns.com"
+[upstreams.cloudflare]
+address = "1.1.1.1"
+network = "tls"
+proxy = "socks5://127.0.0.1:1080"
+tls-host = "cloudflare-dns.com"
 
-  [upstreams.opennic]
-  address = "172.104.162.222"
-  network = "udp"
-  default = false
+[upstreams.opennic]
+address = "172.104.162.222"
+default = false
+network = "udp"
 
 [domains]
-  [domains.opennic]
-  list = [
-    ".bbs", ".chan", ".cyb", ".dyn", ".geek", ".gopher", ".indy",
-    ".libre", ".neo", ".null", ".o", ".oss", ".oz", ".parody", ".pirate"
-  ]
+[domains.opennic]
+list = [
+  ".bbs",
+  ".chan",
+  ".cyb",
+  ".dyn",
+  ".geek",
+  ".gopher",
+  ".indy",
+  ".libre",
+  ".neo",
+  ".null",
+  ".o",
+  ".oss",
+  ".oz",
+  ".parody",
+  ".pirate",
+]
 
-  [domains.proxy]
-  # download from https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/proxy-list.txt
-  files = ["proxy-list.txt"]
+[domains.proxy]
+# download from https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/proxy-list.txt
+files = ["proxy-list.txt"]
 
-  [domains.direct]
-  # download from https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/direct-list.txt
-  files = ["direct-list.txt"]
+[domains.direct]
+# download from https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/direct-list.txt
+files = ["direct-list.txt"]
 
 [ranges]
-  [ranges.cn]
-  # download from https://www.ipdeny.com/ipblocks/data/aggregated/cn.zone
-  files = ["cn.txt"]
+[ranges.cn]
+# download from https://www.ipdeny.com/ipblocks/data/aggregated/cn.zone
+files = ["cn.txt"]
 
 [[requests]]
 domains = ["opennic"]
@@ -50,14 +65,14 @@ upstreams = ["opennic"]
 
 [[requests]]
 domains = ["proxy"]
-upstreams = ["google","cloudflare"]
+upstreams = ["google", "cloudflare"]
 
 [[requests]]
 domains = ["direct"]
-upstreams = ["dnspod","alidns"]
+upstreams = ["dnspod", "alidns"]
 
 [[responses]]
-domains = ["!direct"]
-upstreams = ["dnspod", "alidns"]
-ranges = ["!cn"]
 action = "drop"
+domains = ["!direct"]
+ranges = ["!cn"]
+upstreams = ["dnspod", "alidns"]

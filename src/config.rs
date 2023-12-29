@@ -46,21 +46,24 @@ pub struct ConfigBuilder {
 
 #[derive(Debug)]
 pub enum Upstream {
-    TcpUpstream {
-        address: SocketAddr,
-    },
     UdpUpstream {
         address: SocketAddr,
+    },
+    TcpUpstream {
+        address: SocketAddr,
+        proxy: Option<String>,
     },
     #[cfg(feature = "dns-over-tls")]
     TlsUpstream {
         address: SocketAddr,
         tls_host: String,
+        proxy: Option<String>,
     },
     #[cfg(feature = "dns-over-https")]
     HttpsUpstream {
         address: SocketAddr,
         tls_host: String,
+        proxy: Option<String>,
     },
 }
 
@@ -124,6 +127,7 @@ impl ConfigBuilder {
 pub struct UpstreamConfig {
     address: String,
     network: NetworkType,
+    proxy: Option<String>,
     #[cfg(any(feature = "dns-over-tls", feature = "dns-over-https"))]
     #[serde(rename = "tls-host")]
     tls_host: Option<String>,
@@ -145,18 +149,27 @@ impl UpstreamConfig {
                 .map(|addr| SocketAddr::new(addr, self.network.default_port()));
         }
         let address = address.map_err(|_| ConfigError::InvalidAddress(self.address))?;
+        let proxy = self.proxy;
         match self.network {
-            NetworkType::Tcp => Ok(Upstream::TcpUpstream { address }),
+            NetworkType::Tcp => Ok(Upstream::TcpUpstream { address, proxy }),
             NetworkType::Udp => Ok(Upstream::UdpUpstream { address }),
             #[cfg(feature = "dns-over-tls")]
             NetworkType::Tls => {
                 let tls_host = self.tls_host.ok_or(ConfigError::NoTlsHost)?;
-                Ok(Upstream::TlsUpstream { address, tls_host })
+                Ok(Upstream::TlsUpstream {
+                    address,
+                    tls_host,
+                    proxy,
+                })
             }
             #[cfg(feature = "dns-over-https")]
             NetworkType::Https => {
                 let tls_host = self.tls_host.ok_or(ConfigError::NoTlsHost)?;
-                Ok(Upstream::HttpsUpstream { address, tls_host })
+                Ok(Upstream::HttpsUpstream {
+                    address,
+                    tls_host,
+                    proxy,
+                })
             }
         }
     }

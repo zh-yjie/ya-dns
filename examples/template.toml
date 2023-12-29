@@ -6,80 +6,99 @@ bind = "127.0.0.1:5300" # the address that ya-dns listens on
 # DNS requests will be forwarded to all the upstream servers set up here
 # except those with `default = false`.
 [upstreams]
-  # The 'dnspod' is the name of the upstream server.
-  # It can be used later in the rules.
-  [upstreams.dnspod]
-    # Default port 53 can be ignored for DNS over UDP
-    address = "119.29.29.29" # the address of the DNS server
-    network = "udp"
+# The 'dnspod' is the name of the upstream server.
+# It can be used later in the rules.
+[upstreams.dnspod]
+# Default port 53 can be ignored for DNS over UDP
+address = "119.29.29.29" # the address of the DNS server
+network = "udp" 
 
-  [upstreams.opendns]
-    # If you use a non-standard port, you should specify the port in the address.
-    address = "208.67.222.222:5353"
-    # TCP is supported
-    network = "tcp"
+[upstreams.opendns]
+# If you use a non-standard port, you should specify the port in the address.
+address = "208.67.222.222:5353"
+# TCP is supported
+network = "tcp"
+# You can use socks5 or http proxy to connnect the upstream server. For example: socks5://user:pass@127.0.0.1:1080, http://user:pass@127.0.0.1:8118
+proxy = "socks5://127.0.0.1:1080"
 
-  [upstreams.opendns_v6]
-    # IPv6 is supported.
-    address = "[2620:0:ccc::2]:5353"
-    network = "tcp"
+[upstreams.opendns_v6]
+# IPv6 is supported.
+address = "[2620:0:ccc::2]:5353"
+network = "tcp"
 
-  [upstreams.cloudflare]
-    # We ignore the port here. The default port 853 for DNS over TLS is used.
-    address = "1.1.1.1"
-    # DNS over TLS is supported.
-    network = "tls"
-    # If you use DNS over TLS, you must give the TLS host of the upstream server.
-    tls-host = "cloudflare-dns.com"
+[upstreams.cloudflare]
+# We ignore the port here. The default port 853 for DNS over TLS is used.
+address = "1.1.1.1"
+# DNS over TLS is supported.
+network = "tls"
+# If you use DNS over TLS, you must give the TLS host of the upstream server.
+tls-host = "cloudflare-dns.com"
+# You can use socks5 or http proxy to connnect the upstream server. For example: socks5://user:pass@127.0.0.1:1080, http://user:pass@127.0.0.1:8118
+proxy = "socks5://127.0.0.1:1080"
 
-  [upstreams.google]
-    # The default port 433 for DNS over HTTPS is used.
-    address = "8.8.8.8"
-    # DNS over HTTPS is supported.
-    network = "https"
-    # If you use DNS over HTTPS, you must give the TLS host of the upstream server.
-    tls-host = "dns.google"
+[upstreams.google]
+# The default port 433 for DNS over HTTPS is used.
+address = "8.8.8.8"
+# DNS over HTTPS is supported.
+network = "https"
+# If you use DNS over HTTPS, you must give the TLS host of the upstream server.
+tls-host = "dns.google"
+# You can use socks5 or http proxy to connnect the upstream server. For example: socks5://user:pass@127.0.0.1:1080, http://user:pass@127.0.0.1:8118
+proxy = "socks5://127.0.0.1:1080"
 
-  [upstreams.opennic]
-    address = "2a05:dfc7:5::53"
-    network = "udp"
-    # This tells ya-dns not to forward requests to this server by default.
-    # But you can use it by applying dispatching rules.
-    default = false
+[upstreams.opennic]
+address = "2a05:dfc7:5::53"
+network = "udp"
+# This tells ya-dns not to forward requests to this server by default.
+# But you can use it by applying dispatching rules.
+default = false
 
 # Domain lists are defined here. They can be used later in your rules.
 [domains]
-  # The 'opennic' is the tag of the domain list.
-  # It is useful in the rules later in the file.
-  [domains.opennic]
-    # You can define the patterns directly in the config file using the list attribute.
-    # If one of the patterns matches the right end of the domain, then the domain
-    # is considered inside of this domain list.
-    list = [
-      ".bbs", ".chan", ".cyb", ".dyn", ".geek", ".gopher", ".indy",
-      ".libre", ".neo", ".null", ".o", ".oss", ".oz", ".parody", ".pirate"
-    ]
+# The 'opennic' is the tag of the domain list.
+# It is useful in the rules later in the file.
+[domains.opennic]
+# You can define the patterns directly in the config file using the list attribute.
+# If one of the patterns matches the right end of the domain, then the domain
+# is considered inside of this domain list.
+list = [
+  ".bbs",
+  ".chan",
+  ".cyb",
+  ".dyn",
+  ".geek",
+  ".gopher",
+  ".indy",
+  ".libre",
+  ".neo",
+  ".null",
+  ".o",
+  ".oss",
+  ".oz",
+  ".parody",
+  ".pirate",
+]
 
-  [domains.poisoned]
-    list = ["twitter.com", "facebook.com", "youtube.com"]
-    # Besides defining patterns directly in the config file, it is allowed
-    # to read them from files. Each file should contain lines of patterns only,
-    # except empty lines and lines starting with `#`, which means it is a comment.
-    files = ["gfwlist.txt"]
+[domains.poisoned]
+list = ["twitter.com", "facebook.com", "youtube.com"]
+# Besides defining patterns directly in the config file, it is allowed
+# to read them from files. Each file should contain lines of patterns only,
+# except empty lines and lines starting with `#`, which means it is a comment.
+files = ["gfwlist.txt"]
 
 # Set up the IP ranges you want to use later in your rules here.
 [ranges]
-  # The 'my_range' is the name of the range.
-  # It can be used later in the rules.
-  [ranges.my_range]
-  # You can define CIDRs directly in the config file using the list attribute.
-  # IPv4 CIDRs and IPv6 CIDRs can be mixed.
-  list = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "fd00::/8"]
-  # Besides defining CIDRs directly in the config file, it is allowed
-  # to read them from files. Each file should contain lines of CIDRs only,
-  # except empty lines and lines starting with `#`, which means it is a comment.
-  files = ["chnroutes.txt"]
-  # Of course, it is okay to use 'list' or 'files' alone to define an IP range.
+# The 'my_range' is the name of the range.
+# It can be used later in the rules.
+[ranges.my_range]
+# You can define CIDRs directly in the config file using the list attribute.
+# IPv4 CIDRs and IPv6 CIDRs can be mixed.
+list = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "fd00::/8"]
+# Besides defining CIDRs directly in the config file, it is allowed
+# to read them from files. Each file should contain lines of CIDRs only,
+# except empty lines and lines starting with `#`, which means it is a comment.
+files = ["chnroutes.txt"]
+# Of course, it is okay to use 'list' or 'files' alone to define an IP range.
 
 # Dispatching rules are defined in 'requests' tables. They are used to determine
 # which upstream servers the requests are forwarded to.
@@ -88,44 +107,44 @@ bind = "127.0.0.1:5300" # the address that ya-dns listens on
 # Only the first matched rule will be applied.
 # If no rule is matched, the request will be forwarded to all default servers.
 [[requests]]
-  domains = ["opennic"] # requires that the domain is in one of the specific domain lists
-  types = ["A", "AAAA"] # requires that the record type is in the list
-  # Here defines the names of the upstream servers you would like to dispatch the requests to.
-  # The default upstream servers are ignored. Requests are forwarded only to the servers defined here.
-  upstreams = ["opennic"]
+domains = ["opennic"] # requires that the domain is in one of the specific domain lists
+types = ["A", "AAAA"] # requires that the record type is in the list
+# Here defines the names of the upstream servers you would like to dispatch the requests to.
+# The default upstream servers are ignored. Requests are forwarded only to the servers defined here.
+upstreams = ["opennic"]
 
 [[requests]]
-  # The domains array can contain tags with a leading `!` for inversion.
-  # For instance, '!poisoned' matches all domains which are not in the 'poisoned' domain list.
-  domains = ["!poisoned"]
-  upstreams = ["dnspod"]
+# The domains array can contain tags with a leading `!` for inversion.
+# For instance, '!poisoned' matches all domains which are not in the 'poisoned' domain list.
+domains = ["!poisoned"]
+upstreams = ["dnspod"]
 
 # This rule instructs ya-dns to dispatch AAAA queries to specific upstreams.
 [[requests]]
-  types = ["AAAA"]
-  upstreams = ["opendns_v6", "cloudflare"]
+types = ["AAAA"]
+upstreams = ["opendns_v6", "cloudflare"]
 
 # Multiple rules can be defined to filter responses.
 # If all defined requirements are met, the rule is applied.
 # Rules are checked in the same order as they defined. Only the first matched rule will be applied.
 # The first response which is not dropped is adopted and returned to the client.
 [[responses]]
-  upstreams = ["opendns", "opendns_v6"] # requires the response is from one of the specific upstream servers
-  ranges = ["my_range"] # requires the response IP is in one of the specific IP ranges
-  domains = ["poisoned"] # requires the domain is in one of the specific domain lists
-  # Currently, 'drop' is the only available action.
-  # More actions may be added in the future.
-  action = "drop"
+domains = ["poisoned"] # requires the domain is in one of the specific domain lists
+ranges = ["my_range"] # requires the response IP is in one of the specific IP ranges
+upstreams = ["opendns", "opendns_v6"] # requires the response is from one of the specific upstream servers
+# Currently, 'drop' is the only available action.
+# More actions may be added in the future.
+action = "drop"
 
 [[responses]]
-  upstreams = ["dnspod"]
-  # The ranges and domains array can contain names with a leading `!` for inversion.
-  # For instance, `!my_range` matches all IP addresses which are not in the `my_range` range.
-  ranges = ["!my_range"]
-  domains = ["!poisoned"]
-  action = "drop"
+upstreams = ["dnspod"]
+# The ranges and domains array can contain names with a leading `!` for inversion.
+# For instance, `!my_range` matches all IP addresses which are not in the `my_range` range.
+action = "drop"
+domains = ["!poisoned"]
+ranges = ["!my_range"]
 
 [[responses]]
-  # It is also allowed to have no requirements.
-  # This rule matches all responses. So It will drop all the responses.
-  action = "drop"
+# It is also allowed to have no requirements.
+# This rule matches all responses. So It will drop all the responses.
+action = "drop"

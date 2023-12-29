@@ -1,3 +1,7 @@
+# 0.4.0
+
+- add socks5 and http proxy support
+
 # 0.3.8
 
 - fix DoT and DoH error

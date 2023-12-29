@@ -22,6 +22,8 @@ mod ip;
 mod logger;
 mod option;
 mod resolver;
+mod resolver_proxy;
+mod resolver_runtime_provider;
 
 #[tokio::main]
 async fn main() {

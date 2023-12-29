@@ -34,20 +34,24 @@ impl From<Config> for HandlerConfig {
                 (
                     name.to_owned(),
                     match upstream {
-                        Upstream::TcpUpstream { address } => {
-                            Arc::new(resolver::tcp_resolver(address))
+                        Upstream::TcpUpstream { address, proxy } => {
+                            Arc::new(resolver::tcp_resolver(address, proxy))
                         }
                         Upstream::UdpUpstream { address } => {
                             Arc::new(resolver::udp_resolver(address))
                         }
                         #[cfg(feature = "dns-over-tls")]
-                        Upstream::TlsUpstream { address, tls_host } => {
-                            Arc::new(resolver::tls_resolver(address, tls_host))
-                        }
+                        Upstream::TlsUpstream {
+                            address,
+                            tls_host,
+                            proxy,
+                        } => Arc::new(resolver::tls_resolver(address, tls_host, proxy)),
                         #[cfg(feature = "dns-over-https")]
-                        Upstream::HttpsUpstream { address, tls_host } => {
-                            Arc::new(resolver::https_resolver(address, tls_host))
-                        }
+                        Upstream::HttpsUpstream {
+                            address,
+                            tls_host,
+                            proxy,
+                        } => Arc::new(resolver::https_resolver(address, tls_host, proxy)),
                     },
                 )
             })

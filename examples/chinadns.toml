@@ -1,29 +1,31 @@
 bind = "127.0.0.1:5300"
 
 [upstreams]
-  [upstreams.dnspod]
-  address = "119.29.29.29"
-  network = "udp"
+[upstreams.dnspod]
+address = "119.29.29.29"
+network = "udp"
 
-  [upstreams.alidns]
-  address = "223.5.5.5"
-  network = "udp"
+[upstreams.alidns]
+address = "223.5.5.5"
+network = "udp"
 
-  [upstreams.opendns]
-  address = "208.67.222.222:5353"
-  network = "tcp"
+[upstreams.opendns]
+address = "208.67.222.222:5353"
+network = "tcp"
+proxy = "socks5://127.0.0.1:1080"
 
-  [upstreams.cloudflare]
-  address = "1.1.1.1"
-  network = "tls"
-  tls-host = "cloudflare-dns.com"
+[upstreams.cloudflare]
+address = "1.1.1.1"
+network = "tls"
+proxy = "socks5://127.0.0.1:1080"
+tls-host = "cloudflare-dns.com"
 
 [ranges]
-  [ranges.cn]
-  # download from https://www.ipdeny.com/ipblocks/data/aggregated/cn.zone
-  files = ["cn.txt"]
+[ranges.cn]
+# download from https://www.ipdeny.com/ipblocks/data/aggregated/cn.zone
+files = ["cn.txt"]
 
 [[responses]]
-upstreams = ["dnspod", "alidns"]
-ranges = ["!cn"]
 action = "drop"
+ranges = ["!cn"]
+upstreams = ["dnspod", "alidns"]
