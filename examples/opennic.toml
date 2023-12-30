@@ -1,21 +1,34 @@
 bind = "127.0.0.1:5300"
 
 [upstreams]
-  [upstreams.google]
-    address = "8.8.8.8"
-    network = "udp"
+[upstreams.google]
+address = ["8.8.8.8", "8.8.4.4"]
+network = "udp"
 
-  [upstreams.opennic]
-  address = "172.104.162.222"
-  network = "udp"
-  default = false
+[upstreams.opennic]
+address = ["134.195.4.2", "192.3.165.37"]
+default = false
+network = "udp"
 
 [domains]
-  [domains.opennic]
-  list = [
-    ".bbs", ".chan", ".cyb", ".dyn", ".geek", ".gopher", ".indy",
-    ".libre", ".neo", ".null", ".o", ".oss", ".oz", ".parody", ".pirate"
-  ]
+[domains.opennic]
+list = [
+  ".bbs",
+  ".chan",
+  ".cyb",
+  ".dyn",
+  ".geek",
+  ".gopher",
+  ".indy",
+  ".libre",
+  ".neo",
+  ".null",
+  ".o",
+  ".oss",
+  ".oz",
+  ".parody",
+  ".pirate",
+]
 
 [[requests]]
 domains = ["opennic"]

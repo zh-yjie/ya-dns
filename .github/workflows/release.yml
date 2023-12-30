@@ -49,7 +49,7 @@ jobs:
         run: |
           export CFG_COMMIT_HASH=`git log --pretty=format:'%h' -n 1`
           export CFG_COMMIT_DATE=`git log --format="%ci" -n 1`
-          cross build --release --target ${{ matrix.target }} --features default-openssl --no-default-features
+          cross build --release --target ${{ matrix.target }} --features default-dot-openssl --no-default-features
 
       - name: rename and compress artifacts
         if: ${{ matrix.target == 'x86_64-pc-windows-gnu' }}
@@ -116,7 +116,6 @@ jobs:
     needs: [build-bin-cross, build-bin-local]
     runs-on: macos-latest
     steps:
-
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1

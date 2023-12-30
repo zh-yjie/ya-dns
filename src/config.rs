@@ -47,21 +47,21 @@ pub struct ConfigBuilder {
 #[derive(Debug)]
 pub enum Upstream {
     UdpUpstream {
-        address: SocketAddr,
+        address: Vec<SocketAddr>,
     },
     TcpUpstream {
-        address: SocketAddr,
+        address: Vec<SocketAddr>,
         proxy: Option<String>,
     },
     #[cfg(feature = "dns-over-tls")]
     TlsUpstream {
-        address: SocketAddr,
+        address: Vec<SocketAddr>,
         tls_host: String,
         proxy: Option<String>,
     },
     #[cfg(feature = "dns-over-https")]
     HttpsUpstream {
-        address: SocketAddr,
+        address: Vec<SocketAddr>,
         tls_host: String,
         proxy: Option<String>,
     },
@@ -125,7 +125,7 @@ impl ConfigBuilder {
 
 #[derive(Debug, Deserialize)]
 pub struct UpstreamConfig {
-    address: String,
+    address: Vec<String>,
     network: NetworkType,
     proxy: Option<String>,
     #[cfg(any(feature = "dns-over-tls", feature = "dns-over-https"))]
@@ -141,14 +141,23 @@ impl UpstreamConfig {
     }
 
     fn build(self) -> Result<Upstream, ConfigError> {
-        let mut address = self.address.parse::<SocketAddr>();
-        if let Err(_) = address {
-            address = self
-                .address
-                .parse::<IpAddr>()
-                .map(|addr| SocketAddr::new(addr, self.network.default_port()));
-        }
-        let address = address.map_err(|_| ConfigError::InvalidAddress(self.address))?;
+        let address = self
+            .address
+            .iter()
+            .map(|addr| {
+                let mut address = addr.parse::<SocketAddr>();
+                if let Err(_) = address {
+                    address = addr
+                        .parse::<IpAddr>()
+                        .map(|addr| SocketAddr::new(addr, self.network.default_port()));
+                };
+                match address {
+                    Ok(addr) => Ok(addr),
+                    Err(_) => Err(ConfigError::InvalidAddress(addr.to_string())),
+                }
+            })
+            .collect::<Result<Vec<_>, ConfigError>>()
+            .map_err(|e| e)?;
         let proxy = self.proxy;
         match self.network {
             NetworkType::Tcp => Ok(Upstream::TcpUpstream { address, proxy }),

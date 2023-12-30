@@ -10,44 +10,44 @@ bind = "127.0.0.1:5300" # the address that ya-dns listens on
 # It can be used later in the rules.
 [upstreams.dnspod]
 # Default port 53 can be ignored for DNS over UDP
-address = "119.29.29.29" # the address of the DNS server
-network = "udp" 
+address = ["119.29.29.29"] # the address of the DNS server
+network = "udp"
 
 [upstreams.opendns]
 # If you use a non-standard port, you should specify the port in the address.
-address = "208.67.222.222:5353"
+address = ["208.67.222.222:5353"]
 # TCP is supported
 network = "tcp"
-# You can use socks5 or http proxy to connnect the upstream server. For example: socks5://user:pass@127.0.0.1:1080, http://user:pass@127.0.0.1:8118
+# Use socks5 or http proxy to connnect the upstream server. For example: socks5://user:pass@127.0.0.1:1080, http://user:pass@127.0.0.1:8118
 proxy = "socks5://127.0.0.1:1080"
 
 [upstreams.opendns_v6]
 # IPv6 is supported.
-address = "[2620:0:ccc::2]:5353"
+address = ["[2620:0:ccc::2]:5353"]
 network = "tcp"
 
 [upstreams.cloudflare]
 # We ignore the port here. The default port 853 for DNS over TLS is used.
-address = "1.1.1.1"
+address = ["1.1.1.1"]
 # DNS over TLS is supported.
 network = "tls"
 # If you use DNS over TLS, you must give the TLS host of the upstream server.
 tls-host = "cloudflare-dns.com"
-# You can use socks5 or http proxy to connnect the upstream server. For example: socks5://user:pass@127.0.0.1:1080, http://user:pass@127.0.0.1:8118
+# Use socks5 or http proxy to connnect the upstream server. For example: socks5://user:pass@127.0.0.1:1080, http://user:pass@127.0.0.1:8118
 proxy = "socks5://127.0.0.1:1080"
 
 [upstreams.google]
 # The default port 433 for DNS over HTTPS is used.
-address = "8.8.8.8"
+address = ["8.8.8.8", "8.8.4.4"]
 # DNS over HTTPS is supported.
 network = "https"
 # If you use DNS over HTTPS, you must give the TLS host of the upstream server.
 tls-host = "dns.google"
-# You can use socks5 or http proxy to connnect the upstream server. For example: socks5://user:pass@127.0.0.1:1080, http://user:pass@127.0.0.1:8118
+# Use socks5 or http proxy to connnect the upstream server. For example: socks5://user:pass@127.0.0.1:1080, http://user:pass@127.0.0.1:8118
 proxy = "socks5://127.0.0.1:1080"
 
 [upstreams.opennic]
-address = "2a05:dfc7:5::53"
+address = ["2a05:dfc7:5::53"]
 network = "udp"
 # This tells ya-dns not to forward requests to this server by default.
 # But you can use it by applying dispatching rules.

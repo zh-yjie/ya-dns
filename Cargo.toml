@@ -5,14 +5,20 @@ name = "yadns"
 version = "0.4.0"
 
 [features]
-default = ["default-rustls"]
+default = ["default-doh-rustls"]
 
-default-openssl = ["dns-over-tls", "hickory-resolver/dns-over-openssl", "openssl"]
-default-rustls = [
+default-doh-rustls = [
   "dns-over-tls",
   "dns-over-https",
   "hickory-resolver/dns-over-rustls",
   "hickory-resolver/dns-over-https-rustls",
+  "hickory-resolver/webpki-roots",
+  "hickory-resolver/native-certs",
+]
+default-dot-openssl = ["dns-over-tls", "openssl", "hickory-resolver/dns-over-openssl"]
+default-dot-rustls = [
+  "dns-over-tls",
+  "hickory-resolver/dns-over-rustls",
   "hickory-resolver/webpki-roots",
   "hickory-resolver/native-certs",
 ]

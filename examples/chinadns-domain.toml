@@ -2,27 +2,27 @@ bind = "127.0.0.1:5300"
 
 [upstreams]
 [upstreams.dnspod]
-address = "119.29.29.29"
+address = ["119.29.29.29"]
 network = "udp"
 
 [upstreams.alidns]
-address = "223.5.5.5"
+address = ["223.5.5.5", "223.6.6.6"]
 network = "udp"
 
 [upstreams.google]
-address = "8.8.8.8"
+address = ["8.8.8.8", "8.8.4.4"]
 network = "tls"
 proxy = "socks5://127.0.0.1:1080"
 tls-host = "dns.google"
 
 [upstreams.cloudflare]
-address = "1.1.1.1"
+address = ["1.1.1.1", "1.0.0.1"]
 network = "tls"
 proxy = "socks5://127.0.0.1:1080"
 tls-host = "cloudflare-dns.com"
 
 [upstreams.opennic]
-address = "172.104.162.222"
+address = ["134.195.4.2", "192.3.165.37"]
 default = false
 network = "udp"
 
