@@ -16,8 +16,8 @@ use thiserror::Error;
 pub enum ConfigError {
     #[error("You must configure at least one default upstream server!")]
     NoUpstream,
-    #[error("Invalid address: {0}")]
-    InvalidAddress(String),
+    #[error("{0}:{1}")]
+    InvalidAddress(std::net::AddrParseError, String),
     #[cfg(any(feature = "dns-over-tls", feature = "dns-over-https"))]
     #[error("tls-host is missing")]
     NoTlsHost,
@@ -153,7 +153,7 @@ impl UpstreamConfig {
                 };
                 match address {
                     Ok(addr) => Ok(addr),
-                    Err(_) => Err(ConfigError::InvalidAddress(addr.to_string())),
+                    Err(e) => Err(ConfigError::InvalidAddress(e, addr.to_string())),
                 }
             })
             .collect::<Result<Vec<_>, ConfigError>>()
