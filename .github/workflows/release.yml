@@ -8,6 +8,8 @@ on:
 jobs:
   build-bin-cross:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     strategy:
       matrix:
         target:
