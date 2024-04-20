@@ -104,7 +104,7 @@ mod tests {
             .expect("no addresses returned!")
             .data()
             .unwrap();
-        assert_eq!("93.184.216.34", a.to_string());
+        assert_eq!("93.184.215.14", a.to_string());
     }
 
     #[test]
@@ -120,7 +120,7 @@ mod tests {
             .expect("no addresses returned!")
             .data()
             .unwrap();
-        assert_eq!("93.184.216.34", a.to_string());
+        assert_eq!("93.184.215.14", a.to_string());
     }
 
     #[cfg(feature = "dns-over-tls")]
@@ -138,7 +138,7 @@ mod tests {
             .expect("no addresses returned!")
             .data()
             .unwrap();
-        assert_eq!("93.184.216.34", a.to_string());
+        assert_eq!("93.184.215.14", a.to_string());
     }
 
     #[cfg(feature = "dns-over-https")]
@@ -156,6 +156,6 @@ mod tests {
             .expect("no addresses returned!")
             .data()
             .unwrap();
-        assert_eq!("93.184.216.34", a.to_string());
+        assert_eq!("93.184.215.14", a.to_string());
     }
 }
