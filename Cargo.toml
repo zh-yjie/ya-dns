@@ -2,7 +2,7 @@
 authors = ["zyj"]
 edition = "2021"
 name = "yadns"
-version = "0.4.0"
+version = "0.4.2"
 
 [features]
 default = ["default-doh-rustls"]
