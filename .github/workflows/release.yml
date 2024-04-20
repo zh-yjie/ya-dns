@@ -102,7 +102,7 @@ jobs:
           export CFG_COMMIT_HASH=`git log --pretty=format:'%h' -n 1`
           export CFG_COMMIT_DATE=`git log --format="%ci" -n 1`
           rustup target add ${{ matrix.target }}
-          SDKROOT=$(xcrun -sdk macosx14.2 --show-sdk-path) MACOSX_DEPLOYMENT_TARGET=$(xcrun -sdk macosx14.2 --show-sdk-platform-version) cargo build --release --target ${{ matrix.target }}
+          cargo build --release --target ${{ matrix.target }}
 
       - name: rename and compress artifacts
         run: |
