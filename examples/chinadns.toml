@@ -22,7 +22,7 @@ tls-host = "cloudflare-dns.com"
 
 [ranges]
 [ranges.cn]
-# download from https://www.ipdeny.com/ipblocks/data/aggregated/cn.zone
+# download from https://www.ipdeny.com/ipblocks/data/countries/cn.zone
 files = ["cn.txt"]
 
 [[responses]]

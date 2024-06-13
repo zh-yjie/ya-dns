@@ -1,3 +1,7 @@
+# 0.5.0
+
+- add configuration for the resolver
+
 # 0.4.0
 
 - add socks5 and http proxy support

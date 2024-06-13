@@ -4,6 +4,7 @@ use crate::domain::DomainSuffix;
 use crate::ip::IpRange;
 use crate::resolver;
 use crate::resolver::RecursiveResolver;
+use hickory_resolver::config::ResolverOpts;
 use regex::RegexSet;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -27,6 +28,10 @@ pub struct Domains {
 impl From<Config> for HandlerConfig {
     fn from(config: Config) -> Self {
         // debug!(STDERR, "{:#?}", config);
+        let mut opts = ResolverOpts::default();
+        opts.timeout = config.resolver_opts.timeout;
+        opts.ip_strategy = config.resolver_opts.ip_strategy;
+        opts.cache_size = config.resolver_opts.cache_size;
         let resolvers: HashMap<_, _> = config
             .upstreams
             .iter()
@@ -35,23 +40,33 @@ impl From<Config> for HandlerConfig {
                     name.to_owned(),
                     match upstream {
                         Upstream::TcpUpstream { address, proxy } => {
-                            Arc::new(resolver::tcp_resolver(address, proxy))
+                            Arc::new(resolver::tcp_resolver(address, opts.to_owned(), proxy))
                         }
                         Upstream::UdpUpstream { address } => {
-                            Arc::new(resolver::udp_resolver(address))
+                            Arc::new(resolver::udp_resolver(address, opts.to_owned()))
                         }
                         #[cfg(feature = "dns-over-tls")]
                         Upstream::TlsUpstream {
                             address,
                             tls_host,
                             proxy,
-                        } => Arc::new(resolver::tls_resolver(address, tls_host, proxy)),
+                        } => Arc::new(resolver::tls_resolver(
+                            address,
+                            tls_host,
+                            opts.to_owned(),
+                            proxy,
+                        )),
                         #[cfg(feature = "dns-over-https")]
                         Upstream::HttpsUpstream {
                             address,
                             tls_host,
                             proxy,
-                        } => Arc::new(resolver::https_resolver(address, tls_host, proxy)),
+                        } => Arc::new(resolver::https_resolver(
+                            address,
+                            tls_host,
+                            opts.to_owned(),
+                            proxy,
+                        )),
                     },
                 )
             })

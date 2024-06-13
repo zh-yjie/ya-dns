@@ -1,5 +1,6 @@
 use crate::ip::IpRange;
 use hickory_proto::rr::RecordType;
+use hickory_resolver::config::LookupIpStrategy;
 use ipnet::AddrParseError;
 use ipnet::IpNet;
 use serde_derive::Deserialize;
@@ -10,6 +11,7 @@ use std::io::BufReader;
 use std::net::IpAddr;
 use std::net::SocketAddr;
 use std::str::FromStr;
+use std::time::Duration;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -27,6 +29,7 @@ pub enum ConfigError {
 pub struct Config {
     pub bind: SocketAddr,
     pub default_upstreams: Vec<String>,
+    pub resolver_opts: ResolverOpts,
     pub upstreams: HashMap<String, Upstream>,
     pub domains: HashMap<String, Domains>,
     pub ranges: HashMap<String, IpRange>,
@@ -37,6 +40,7 @@ pub struct Config {
 #[derive(Debug, Deserialize)]
 pub struct ConfigBuilder {
     bind: SocketAddr,
+    resolver_opts: Option<ResolverOptsConfig>,
     upstreams: HashMap<String, UpstreamConfig>,
     domains: Option<HashMap<String, DomainsConf>>,
     ranges: Option<HashMap<String, IpRangeConf>>,
@@ -70,6 +74,15 @@ pub enum Upstream {
 impl ConfigBuilder {
     pub fn build(self) -> Result<Config, ConfigError> {
         let mut default_upstreams = Vec::new();
+
+        let resolver_opts = self
+            .resolver_opts
+            .unwrap_or(ResolverOptsConfig {
+                timeout: None,
+                strategy: None,
+                cache_size: None,
+            })
+            .build();
 
         let upstreams = self
             .upstreams
@@ -114,12 +127,60 @@ impl ConfigBuilder {
         Ok(Config {
             bind: self.bind,
             default_upstreams,
+            resolver_opts,
             upstreams,
             domains,
             ranges,
             request_rules,
             response_rules: self.responses.unwrap_or_default(),
         })
+    }
+}
+
+#[derive(Debug)]
+pub struct ResolverOpts {
+    pub timeout: Duration,
+    pub ip_strategy: LookupIpStrategy,
+    pub cache_size: usize,
+}
+
+#[derive(Debug, Deserialize)]
+struct ResolverOptsConfig {
+    timeout: Option<u64>,
+    strategy: Option<StrategyType>,
+    cache_size: Option<usize>,
+}
+
+#[derive(Debug, Deserialize)]
+enum StrategyType {
+    #[serde(rename = "Ipv4Only")]
+    Ipv4Only,
+    #[serde(rename = "Ipv6Only")]
+    Ipv6Only,
+    #[serde(rename = "Ipv4AndIpv6")]
+    Ipv4AndIpv6,
+    #[serde(rename = "Ipv6thenIpv4")]
+    Ipv6thenIpv4,
+    #[serde(rename = "Ipv4thenIpv6")]
+    Ipv4thenIpv6,
+}
+
+impl ResolverOptsConfig {
+    fn build(self) -> ResolverOpts {
+        ResolverOpts {
+            timeout: Duration::from_secs(self.timeout.unwrap_or(5)),
+            ip_strategy: self
+                .strategy
+                .map(|s| match s {
+                    StrategyType::Ipv4Only => LookupIpStrategy::Ipv4Only,
+                    StrategyType::Ipv6Only => LookupIpStrategy::Ipv6Only,
+                    StrategyType::Ipv4AndIpv6 => LookupIpStrategy::Ipv4AndIpv6,
+                    StrategyType::Ipv6thenIpv4 => LookupIpStrategy::Ipv6thenIpv4,
+                    StrategyType::Ipv4thenIpv6 => LookupIpStrategy::Ipv4thenIpv6,
+                })
+                .unwrap_or_default(),
+            cache_size: self.cache_size.unwrap_or(32),
+        }
     }
 }
 

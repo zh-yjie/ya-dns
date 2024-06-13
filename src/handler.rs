@@ -55,12 +55,13 @@ impl Handler {
             .map(|name| {
                 let domain1 = request.query().name().to_string();
                 let domain2 = request.query().name().to_string();
-                let query_type = request.query().query_type();
+                //let query_type = request.query().query_type();
                 let name1 = name.to_string();
                 let name2 = name.to_string();
                 let rs = handler_config().resolvers.get(name);
                 rs.unwrap()
-                    .resolve(domain1, query_type)
+                    // .resolve(domain1, query_type)
+                    .resolve(domain1)
                     .boxed()
                     .map_ok(move |resp| (domain2, name1, resp))
                     .map_err(move |e| (name2, e))
