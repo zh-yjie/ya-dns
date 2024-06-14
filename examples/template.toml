@@ -7,12 +7,14 @@ bind = "127.0.0.1:5300" # the address that ya-dns listens on
 [resolver_opts]
 # Specify the timeout for a request. Defaults to 5 seconds
 timeout = 5
-# The strategy for the Resolver to use when lookup Ipv4 or Ipv6 addresses. Available lookup ip strategy options:
-# Ipv4Only, Only query for A (Ipv4) records
-# Ipv6Only, Only query for AAAA (Ipv6) records
-# Ipv4AndIpv6, Query for A and AAAA in parallel
-# Ipv6thenIpv4, Query for Ipv6 if that fails, query for Ipv4
-# Ipv4thenIpv6, Query for Ipv4 if that fails, query for Ipv6 (default)
+# The strategy for the Resolver to use when lookup Ipv4 or Ipv6 addresses.
+# Available lookup ip strategy options:
+#   None, Query records by client query type  (default)
+#   Ipv4Only, Only query for A (Ipv4) records
+#   Ipv6Only, Only query for AAAA (Ipv6) records
+#   Ipv4AndIpv6, Query for A and AAAA in parallel
+#   Ipv6thenIpv4, Query for Ipv6 if that fails, query for Ipv4
+#   Ipv4thenIpv6, Query for Ipv4 if that fails, query for Ipv6
 strategy = "Ipv4thenIpv6"
 # Cache size is in number of records (some records can be large)
 cache_size = 32

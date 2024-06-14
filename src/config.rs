@@ -140,7 +140,7 @@ impl ConfigBuilder {
 #[derive(Debug)]
 pub struct ResolverOpts {
     pub timeout: Duration,
-    pub ip_strategy: LookupIpStrategy,
+    pub ip_strategy: Option<LookupIpStrategy>,
     pub cache_size: usize,
 }
 
@@ -153,6 +153,8 @@ struct ResolverOptsConfig {
 
 #[derive(Debug, Deserialize)]
 enum StrategyType {
+    #[serde(rename = "None")]
+    None,
     #[serde(rename = "Ipv4Only")]
     Ipv4Only,
     #[serde(rename = "Ipv6Only")]
@@ -172,13 +174,14 @@ impl ResolverOptsConfig {
             ip_strategy: self
                 .strategy
                 .map(|s| match s {
-                    StrategyType::Ipv4Only => LookupIpStrategy::Ipv4Only,
-                    StrategyType::Ipv6Only => LookupIpStrategy::Ipv6Only,
-                    StrategyType::Ipv4AndIpv6 => LookupIpStrategy::Ipv4AndIpv6,
-                    StrategyType::Ipv6thenIpv4 => LookupIpStrategy::Ipv6thenIpv4,
-                    StrategyType::Ipv4thenIpv6 => LookupIpStrategy::Ipv4thenIpv6,
+                    StrategyType::Ipv4Only => Some(LookupIpStrategy::Ipv4Only),
+                    StrategyType::Ipv6Only => Some(LookupIpStrategy::Ipv6Only),
+                    StrategyType::Ipv4AndIpv6 => Some(LookupIpStrategy::Ipv4AndIpv6),
+                    StrategyType::Ipv6thenIpv4 => Some(LookupIpStrategy::Ipv6thenIpv4),
+                    StrategyType::Ipv4thenIpv6 => Some(LookupIpStrategy::Ipv4thenIpv6),
+                    StrategyType::None => None,
                 })
-                .unwrap_or_default(),
+                .unwrap_or(None),
             cache_size: self.cache_size.unwrap_or(32),
         }
     }

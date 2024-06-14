@@ -30,8 +30,9 @@ impl From<Config> for HandlerConfig {
         // debug!(STDERR, "{:#?}", config);
         let mut opts = ResolverOpts::default();
         opts.timeout = config.resolver_opts.timeout;
-        opts.ip_strategy = config.resolver_opts.ip_strategy;
+        opts.ip_strategy = config.resolver_opts.ip_strategy.unwrap_or_default();
         opts.cache_size = config.resolver_opts.cache_size;
+        let lookup_ip_only = config.resolver_opts.ip_strategy.is_some();
         let resolvers: HashMap<_, _> = config
             .upstreams
             .iter()
@@ -39,12 +40,14 @@ impl From<Config> for HandlerConfig {
                 (
                     name.to_owned(),
                     match upstream {
-                        Upstream::TcpUpstream { address, proxy } => {
-                            Arc::new(resolver::tcp_resolver(address, opts.to_owned(), proxy))
-                        }
-                        Upstream::UdpUpstream { address } => {
-                            Arc::new(resolver::udp_resolver(address, opts.to_owned()))
-                        }
+                        Upstream::TcpUpstream { address, proxy } => Arc::new(
+                            resolver::tcp_resolver(address, opts.to_owned(), lookup_ip_only, proxy),
+                        ),
+                        Upstream::UdpUpstream { address } => Arc::new(resolver::udp_resolver(
+                            address,
+                            opts.to_owned(),
+                            lookup_ip_only,
+                        )),
                         #[cfg(feature = "dns-over-tls")]
                         Upstream::TlsUpstream {
                             address,
@@ -54,6 +57,7 @@ impl From<Config> for HandlerConfig {
                             address,
                             tls_host,
                             opts.to_owned(),
+                            lookup_ip_only,
                             proxy,
                         )),
                         #[cfg(feature = "dns-over-https")]
@@ -65,6 +69,7 @@ impl From<Config> for HandlerConfig {
                             address,
                             tls_host,
                             opts.to_owned(),
+                            lookup_ip_only,
                             proxy,
                         )),
                     },
