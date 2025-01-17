@@ -336,8 +336,12 @@ impl DomainsConf {
                 let line1 = line.trim_start_matches("regexp:");
                 regex_set.push(String::from(line1));
             } else {
-                let line1 = line.trim_start_matches("full:").trim_start_matches(".");
-                suffix_set.push(String::from(line1));
+                let line1 = line.trim_start_matches("full:").trim_start_matches("domain:").trim_start_matches(".");
+                let dm = match line1.find(":@") {
+                    Some(index) => line1[..index].to_string(),
+                    None => String::from(line1),
+                };
+                suffix_set.push(dm);
             }
         };
 
