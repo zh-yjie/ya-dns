@@ -120,15 +120,9 @@ mod tests {
         let dns_addr = "8.8.8.8:53".parse::<SocketAddr>().unwrap();
         let io_loop = Runtime::new().unwrap();
         let resolver = udp_resolver(&vec![dns_addr], ResolverOpts::default(), false);
-        let lookup_future = resolver.resolve(String::from("www.example.com"), RecordType::A);
+        let lookup_future = resolver.resolve(String::from("dns.google"), RecordType::A);
         let response = io_loop.block_on(lookup_future).unwrap();
-        let a = response
-            .record_iter()
-            .next()
-            .expect("no addresses returned!")
-            .data()
-            .unwrap();
-        assert_eq!("93.184.215.14", a.to_string());
+        assert!(response.record_iter().any(|r| r.data().unwrap().to_string().eq("8.8.8.8")));
     }
 
     #[test]
@@ -136,15 +130,9 @@ mod tests {
         let dns_addr = "8.8.8.8:53".parse::<SocketAddr>().unwrap();
         let io_loop = Runtime::new().unwrap();
         let resolver = tcp_resolver(&vec![dns_addr], ResolverOpts::default(), false, &None);
-        let lookup_future = resolver.resolve(String::from("www.example.com"), RecordType::A);
+        let lookup_future = resolver.resolve(String::from("dns.google"), RecordType::A);
         let response = io_loop.block_on(lookup_future).unwrap();
-        let a = response
-            .record_iter()
-            .next()
-            .expect("no addresses returned!")
-            .data()
-            .unwrap();
-        assert_eq!("93.184.215.14", a.to_string());
+        assert!(response.record_iter().any(|r| r.data().unwrap().to_string().eq("8.8.8.8")));
     }
 
     #[cfg(feature = "dns-over-tls")]
@@ -160,15 +148,9 @@ mod tests {
             false,
             &None,
         );
-        let lookup_future = resolver.resolve(String::from("www.example.com"), RecordType::A);
+        let lookup_future = resolver.resolve(String::from("dns.google"), RecordType::A);
         let response = io_loop.block_on(lookup_future).unwrap();
-        let a = response
-            .record_iter()
-            .next()
-            .expect("no addresses returned!")
-            .data()
-            .unwrap();
-        assert_eq!("93.184.215.14", a.to_string());
+        assert!(response.record_iter().any(|r| r.data().unwrap().to_string().eq("8.8.8.8")));
     }
 
     #[cfg(feature = "dns-over-https")]
@@ -184,14 +166,8 @@ mod tests {
             false,
             &None,
         );
-        let lookup_future = resolver.resolve(String::from("www.example.com"), RecordType::A);
+        let lookup_future = resolver.resolve(String::from("dns.google"), RecordType::A);
         let response = io_loop.block_on(lookup_future).unwrap();
-        let a = response
-            .record_iter()
-            .next()
-            .expect("no addresses returned!")
-            .data()
-            .unwrap();
-        assert_eq!("93.184.215.14", a.to_string());
+        assert!(response.record_iter().any(|r| r.data().unwrap().to_string().eq("8.8.8.8")));
     }
 }
