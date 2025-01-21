@@ -14,7 +14,8 @@ Prebuilt releases are available [here](https://github.com/zh-yjie/ya-dns/release
 * UDP
 * TCP
 * DNS over TLS (DoT)
-* DNS over HTTPS (DoH) *(mips not support)*
+* DNS over HTTPS (DoH)
+* DNS over HTTP/3 (DoH3)
 * Rule based forwarding
 * Rule based response filtering
 * Parallel forwarding

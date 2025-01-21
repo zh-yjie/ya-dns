@@ -2,37 +2,39 @@
 authors = ["zyj"]
 edition = "2021"
 name = "yadns"
-version = "0.5.1"
+version = "0.6.0"
 
 [features]
-default = ["default-doh-rustls"]
+default = ["default-doh-rustls", "default-doh3-rustls"]
 
 default-doh-rustls = [
-  "dns-over-tls",
+  "default-dot-rustls",
   "dns-over-https",
-  "hickory-resolver/dns-over-rustls",
-  "hickory-resolver/dns-over-https-rustls",
-  "hickory-resolver/webpki-roots",
-  "hickory-resolver/native-certs",
+  "hickory-resolver/dns-over-https-rustls"
 ]
-default-dot-openssl = ["dns-over-tls", "openssl", "hickory-resolver/dns-over-openssl"]
+default-dot-openssl = ["dns-over-tls", "hickory-resolver/dns-over-openssl"]
 default-dot-rustls = [
   "dns-over-tls",
   "hickory-resolver/dns-over-rustls",
   "hickory-resolver/webpki-roots",
   "hickory-resolver/native-certs",
 ]
+default-doh3-rustls = [
+  "default-dot-rustls",
+  "dns-over-h3"
+]
 default-tcp_udp = []
 
 dns-over-https = ["hickory-resolver/dns-over-https"]
 dns-over-tls = ["hickory-resolver/dns-over-tls"]
+dns-over-h3 = ["hickory-resolver/dns-over-h3"]
 
 [dependencies]
 async-http-proxy = {version = "1", features = ["runtime-tokio", "basic-auth"]}
 async-recursion = "1"
 async-trait = "0.1"
 clap = {version = "4", features = ["derive"]}
-fast-socks5 = "0.9"
+fast-socks5 = "0.10"
 futures = {version = "0.3", default-features = false}
 hickory-proto = "0.24"
 hickory-resolver = {version = "0.24", default-features = false, features = ["tokio-runtime"]}
@@ -40,7 +42,6 @@ hickory-server = "0.24"
 ipnet = "2"
 iprange = "0.6"
 once_cell = "1"
-openssl = {version = "0.10", features = ["vendored"], optional = true}
 publicsuffix = "2"
 regex = "1"
 serde = "1"

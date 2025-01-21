@@ -20,7 +20,7 @@ pub enum ConfigError {
     NoUpstream,
     #[error("{0}:{1}")]
     InvalidAddress(std::net::AddrParseError, String),
-    #[cfg(any(feature = "dns-over-tls", feature = "dns-over-https"))]
+    #[cfg(any(feature = "dns-over-tls", feature = "dns-over-https", feature = "dns-over-h3"))]
     #[error("tls-host is missing")]
     NoTlsHost,
 }
@@ -52,6 +52,7 @@ pub struct ConfigBuilder {
 pub enum Upstream {
     UdpUpstream {
         address: Vec<SocketAddr>,
+        proxy: Option<String>,
     },
     TcpUpstream {
         address: Vec<SocketAddr>,
@@ -65,6 +66,12 @@ pub enum Upstream {
     },
     #[cfg(feature = "dns-over-https")]
     HttpsUpstream {
+        address: Vec<SocketAddr>,
+        tls_host: String,
+        proxy: Option<String>,
+    },
+    #[cfg(feature = "dns-over-h3")]
+    H3Upstream {
         address: Vec<SocketAddr>,
         tls_host: String,
         proxy: Option<String>,
@@ -192,7 +199,7 @@ pub struct UpstreamConfig {
     address: Vec<String>,
     network: NetworkType,
     proxy: Option<String>,
-    #[cfg(any(feature = "dns-over-tls", feature = "dns-over-https"))]
+    #[cfg(any(feature = "dns-over-tls", feature = "dns-over-https", feature = "dns-over-h3"))]
     #[serde(rename = "tls-host")]
     tls_host: Option<String>,
     #[serde(default = "UpstreamConfig::default_default")]
@@ -225,7 +232,7 @@ impl UpstreamConfig {
         let proxy = self.proxy;
         match self.network {
             NetworkType::Tcp => Ok(Upstream::TcpUpstream { address, proxy }),
-            NetworkType::Udp => Ok(Upstream::UdpUpstream { address }),
+            NetworkType::Udp => Ok(Upstream::UdpUpstream { address, proxy }),
             #[cfg(feature = "dns-over-tls")]
             NetworkType::Tls => {
                 let tls_host = self.tls_host.ok_or(ConfigError::NoTlsHost)?;
@@ -239,6 +246,15 @@ impl UpstreamConfig {
             NetworkType::Https => {
                 let tls_host = self.tls_host.ok_or(ConfigError::NoTlsHost)?;
                 Ok(Upstream::HttpsUpstream {
+                    address,
+                    tls_host,
+                    proxy,
+                })
+            }
+            #[cfg(feature = "dns-over-h3")]
+            NetworkType::H3 => {
+                let tls_host = self.tls_host.ok_or(ConfigError::NoTlsHost)?;
+                Ok(Upstream::H3Upstream {
                     address,
                     tls_host,
                     proxy,
@@ -260,6 +276,9 @@ enum NetworkType {
     #[cfg(feature = "dns-over-https")]
     #[serde(rename = "https")]
     Https,
+    #[cfg(feature = "dns-over-h3")]
+    #[serde(rename = "h3")]
+    H3,
 }
 
 impl NetworkType {
@@ -270,6 +289,8 @@ impl NetworkType {
             NetworkType::Tls => 853,
             #[cfg(feature = "dns-over-https")]
             NetworkType::Https => 443,
+            #[cfg(feature = "dns-over-h3")]
+            NetworkType::H3 => 443,
         }
     }
 }

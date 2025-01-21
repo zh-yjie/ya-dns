@@ -43,10 +43,11 @@ impl From<Config> for HandlerConfig {
                         Upstream::TcpUpstream { address, proxy } => Arc::new(
                             resolver::tcp_resolver(address, opts.to_owned(), lookup_ip_only, proxy),
                         ),
-                        Upstream::UdpUpstream { address } => Arc::new(resolver::udp_resolver(
+                        Upstream::UdpUpstream { address, proxy } => Arc::new(resolver::udp_resolver(
                             address,
                             opts.to_owned(),
                             lookup_ip_only,
+                            proxy,
                         )),
                         #[cfg(feature = "dns-over-tls")]
                         Upstream::TlsUpstream {
@@ -66,6 +67,18 @@ impl From<Config> for HandlerConfig {
                             tls_host,
                             proxy,
                         } => Arc::new(resolver::https_resolver(
+                            address,
+                            tls_host,
+                            opts.to_owned(),
+                            lookup_ip_only,
+                            proxy,
+                        )),
+                        #[cfg(feature = "dns-over-h3")]
+                        Upstream::H3Upstream {
+                            address,
+                            tls_host,
+                            proxy,
+                        } => Arc::new(resolver::h3_resolver(
                             address,
                             tls_host,
                             opts.to_owned(),

@@ -18,11 +18,17 @@ jobs:
       matrix:
         feature:
           - default-doh-rustls
-          # - default-dot-openssl
+          - default-dot-openssl
           - default-dot-rustls
+          - default-doh3-rustls
           - default-tcp_udp
     steps:
-      - uses: actions/checkout@v3
+      - name: checkout
+        uses: actions/checkout@v3
+      - name: install deps
+        if: ${{ matrix.feature == 'default-dot-openssl' }}
+        run: |
+          sudo apt update && sudo apt install -y pkg-config libssl-dev
       - name: Build
         run: cargo build --verbose --no-default-features --features ${{ matrix.feature }}
       - name: Run tests

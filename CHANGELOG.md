@@ -1,3 +1,7 @@
+# 0.6.0
+
+- add dns over http3 support
+
 # 0.5.0
 
 - add configuration for the resolver

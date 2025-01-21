@@ -46,12 +46,13 @@ pub fn udp_resolver(
     address: &Vec<SocketAddr>,
     options: ResolverOpts,
     lookup_ip_only: bool,
+    proxy: &Option<String>,
 ) -> RecursiveResolver {
     let mut resolver_config = ResolverConfig::new();
     address.iter().for_each(|addr| {
         resolver_config.add_name_server(NameServerConfig::new(*addr, Protocol::Udp));
     });
-    let runtime_provider = ProxyRuntimeProvider::new(None);
+    let runtime_provider = ProxyRuntimeProvider::new(proxy.to_owned().map(|p| p.parse().unwrap()));
     let provider = ProxyConnectionProvider::new(runtime_provider);
     RecursiveResolver::new(resolver_config, options, provider, lookup_ip_only)
 }
@@ -109,6 +110,25 @@ pub fn https_resolver(
     RecursiveResolver::new(resolver_config, options, provider, lookup_ip_only)
 }
 
+#[cfg(feature = "dns-over-h3")]
+pub fn h3_resolver(
+    address: &Vec<SocketAddr>,
+    tls_host: &String,
+    options: ResolverOpts,
+    lookup_ip_only: bool,
+    proxy: &Option<String>,
+) -> RecursiveResolver {
+    let mut resolver_config = ResolverConfig::new();
+    address.iter().for_each(|addr| {
+        let mut name_server_config = NameServerConfig::new(*addr, Protocol::H3);
+        name_server_config.tls_dns_name = Some(tls_host.to_owned());
+        resolver_config.add_name_server(name_server_config);
+    });
+    let runtime_provider = ProxyRuntimeProvider::new(proxy.to_owned().map(|p| p.parse().unwrap()));
+    let provider = ProxyConnectionProvider::new(runtime_provider);
+    RecursiveResolver::new(resolver_config, options, provider, lookup_ip_only)
+}
+
 #[cfg(test)]
 mod tests {
     use tokio::runtime::Runtime;
@@ -119,7 +139,7 @@ mod tests {
     fn udp_resolver_test() {
         let dns_addr = "8.8.8.8:53".parse::<SocketAddr>().unwrap();
         let io_loop = Runtime::new().unwrap();
-        let resolver = udp_resolver(&vec![dns_addr], ResolverOpts::default(), false);
+        let resolver = udp_resolver(&vec![dns_addr], ResolverOpts::default(), false, &None);
         let lookup_future = resolver.resolve(String::from("dns.google"), RecordType::A);
         let response = io_loop.block_on(lookup_future).unwrap();
         assert!(response.record_iter().any(|r| r.data().unwrap().to_string().eq("8.8.8.8")));
@@ -170,4 +190,23 @@ mod tests {
         let response = io_loop.block_on(lookup_future).unwrap();
         assert!(response.record_iter().any(|r| r.data().unwrap().to_string().eq("8.8.8.8")));
     }
+
+    #[cfg(feature = "dns-over-h3")]
+    #[test]
+    fn h3_resolver_test() {
+        let dns_addr = "8.8.8.8:443".parse::<SocketAddr>().unwrap();
+        let dns_host = String::from("dns.google");
+        let io_loop = Runtime::new().unwrap();
+        let resolver = h3_resolver(
+            &vec![dns_addr],
+            &dns_host,
+            ResolverOpts::default(),
+            false,
+            &None,
+        );
+        let lookup_future = resolver.resolve(String::from("dns.google"), RecordType::A);
+        let response = io_loop.block_on(lookup_future).unwrap();
+        assert!(response.record_iter().any(|r| r.data().unwrap().to_string().eq("8.8.8.8")));
+    }
+
 }
