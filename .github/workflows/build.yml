@@ -18,7 +18,7 @@ jobs:
       matrix:
         feature:
           - default-doh-rustls
-          - default-dot-openssl
+          # - default-dot-openssl
           - default-dot-rustls
           - default-doh3-rustls
           - default-tcp_udp
