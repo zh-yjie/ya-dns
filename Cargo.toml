@@ -35,7 +35,7 @@ async-recursion = "1"
 async-trait = "0.1"
 clap = {version = "4", features = ["derive"]}
 fast-socks5 = "0.10"
-futures = {version = "0.3", default-features = false}
+futures = {version = "0.3", default-features = false, features = ["executor"]}
 hickory-proto = "0.24"
 hickory-resolver = {version = "0.24", default-features = false, features = ["tokio-runtime"]}
 hickory-server = "0.24"

@@ -3,7 +3,6 @@ use hickory_proto::iocompat::AsyncIoTokioAsStd;
 use hickory_resolver::name_server::GenericConnector;
 use std::io;
 use std::pin::Pin;
-use tokio::net::UdpSocket as TokioUdpSocket;
 
 use std::net::SocketAddr;
 
@@ -32,7 +31,7 @@ impl ProxyRuntimeProvider {
 impl RuntimeProvider for ProxyRuntimeProvider {
     type Handle = TokioHandle;
     type Timer = TokioTime;
-    type Udp = TokioUdpSocket;
+    type Udp = resolver_proxy::Socks5UdpSocket;
     type Tcp = AsyncIoTokioAsStd<resolver_proxy::TcpStream>;
 
     fn create_handle(&self) -> Self::Handle {
@@ -55,9 +54,12 @@ impl RuntimeProvider for ProxyRuntimeProvider {
     fn bind_udp(
         &self,
         local_addr: SocketAddr,
-        _server_addr: SocketAddr,
+        server_addr: SocketAddr,
     ) -> Pin<Box<dyn Send + Future<Output = io::Result<Self::Udp>>>> {
-        Box::pin(tokio::net::UdpSocket::bind(local_addr))
+        let proxy_config = self.proxy.clone();
+        Box::pin(async move {
+            resolver_proxy::bind_udp(local_addr, server_addr, proxy_config.as_ref()).await
+        })
     }
 }
 

@@ -1,6 +1,7 @@
 # 0.6.0
 
 - add dns over http3 support
+- add SOCKS5 UDP client
 
 # 0.5.0
 

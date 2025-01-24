@@ -1,4 +1,19 @@
+use async_trait::async_trait;
+use fast_socks5::client::Config;
 use fast_socks5::client::Socks5Stream;
+use fast_socks5::new_udp_header;
+use fast_socks5::parse_udp_request;
+use fast_socks5::util::target_addr::TargetAddr;
+use fast_socks5::AuthenticationMethod;
+use fast_socks5::Socks5Command;
+use futures::executor::block_on;
+use futures::ready;
+use hickory_proto::udp::DnsUdpSocket;
+use hickory_proto::udp::QuicLocalAddr;
+use hickory_proto::TokioTime;
+use std::net::ToSocketAddrs;
+use std::task::Context;
+use std::task::Poll;
 use std::{
     fmt::{Display, Write},
     io,
@@ -7,6 +22,7 @@ use std::{
     str::FromStr,
 };
 use tokio::net::TcpStream as TokioTcpStream;
+use tokio::net::UdpSocket;
 
 use thiserror::Error;
 use url::{ParseError, Url};
@@ -78,6 +94,56 @@ pub async fn connect_tcp(
         None => TokioTcpStream::connect(server_addr)
             .await
             .map(TcpStream::Tokio),
+    }
+}
+
+pub async fn bind_udp(
+    local_addr: SocketAddr,
+    _server_addr: SocketAddr,
+    proxy: Option<&ProxyConfig>,
+) -> io::Result<Socks5UdpSocket> {
+    match proxy {
+        Some(proxy) => match proxy.proto {
+            ProxyProtocol::Socks5 => {
+                let auth = if proxy.username.is_some() {
+                    Some(AuthenticationMethod::Password {
+                        username: proxy
+                            .username
+                            .as_deref()
+                            .map(|s| s.to_owned())
+                            .unwrap_or_default(),
+                        password: proxy
+                            .password
+                            .as_deref()
+                            .map(|s| s.to_owned())
+                            .unwrap_or_default(),
+                    })
+                } else {
+                    None
+                };
+                let backing_socket = block_on(tokio::net::TcpStream::connect(proxy.server))?;
+                let mut proxy_stream = block_on(Socks5Stream::use_stream(
+                    backing_socket,
+                    auth,
+                    Config::default(),
+                ))
+                .unwrap();
+                let client_src = TargetAddr::Ip("[::]:0".parse().unwrap());
+                let proxy_addr =
+                    block_on(proxy_stream.request(Socks5Command::UDPAssociate, client_src))
+                        .unwrap();
+                let proxy_addr_resolved = proxy_addr.to_socket_addrs().unwrap().next().unwrap();
+                let udp_socket = tokio::net::UdpSocket::bind(local_addr).await?;
+                block_on(udp_socket.connect(proxy_addr_resolved))?;
+                Ok(Socks5UdpSocket::Proxy(udp_socket, proxy_stream))
+            }
+            _ => Ok(Socks5UdpSocket::Tokio(
+                tokio::net::UdpSocket::bind(local_addr).await?,
+            )),
+        },
+        None => Ok(Socks5UdpSocket::Tokio(
+            tokio::net::UdpSocket::bind(local_addr).await?,
+        )),
     }
 }
 
@@ -225,4 +291,70 @@ pub enum ProxyParseError {
     Addr(#[from] AddrParseError),
     #[error("{0:?}")]
     Parse(#[from] ParseError),
+}
+
+pub enum Socks5UdpSocket {
+    Tokio(UdpSocket),
+    Proxy(UdpSocket, Socks5Stream<TokioTcpStream>),
+}
+
+unsafe impl Send for Socks5UdpSocket {}
+
+impl QuicLocalAddr for Socks5UdpSocket {
+    fn local_addr(&self) -> std::io::Result<SocketAddr> {
+        match self {
+            Socks5UdpSocket::Tokio(udp_socket) => udp_socket.local_addr(),
+            Socks5UdpSocket::Proxy(udp_socket, _) => udp_socket.local_addr(),
+        }
+    }
+}
+
+#[async_trait]
+impl DnsUdpSocket for Socks5UdpSocket {
+    type Time = TokioTime;
+
+    fn poll_recv_from(
+        &self,
+        cx: &mut Context<'_>,
+        buf: &mut [u8],
+    ) -> Poll<io::Result<(usize, SocketAddr)>> {
+        match self {
+            Socks5UdpSocket::Tokio(udp_socket) => {
+                let mut buf = tokio::io::ReadBuf::new(buf);
+                let addr = ready!(udp_socket.poll_recv_from(cx, &mut buf))?;
+                let len = buf.filled().len();
+                Poll::Ready(Ok((len, addr)))
+            }
+            Socks5UdpSocket::Proxy(udp_socket, _) => {
+                let mut _buf = [0u8; 0x10000];
+                let mut r_buf = tokio::io::ReadBuf::new(&mut _buf);
+                ready!(udp_socket.poll_recv_from(cx, &mut r_buf))?;
+                let size = r_buf.filled().len();
+                let (_frag, target_addr, data) =
+                    block_on(parse_udp_request(&mut _buf[..size])).unwrap();
+                buf[..data.len()].copy_from_slice(data);
+                let len = data.len();
+                let addr = target_addr.to_socket_addrs().unwrap().next().unwrap();
+                Poll::Ready(Ok((len, addr)))
+            }
+        }
+    }
+
+    fn poll_send_to(
+        &self,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+        target: SocketAddr,
+    ) -> Poll<io::Result<usize>> {
+        match self {
+            Socks5UdpSocket::Tokio(udp_socket) => udp_socket.poll_send_to(cx, buf, target),
+            Socks5UdpSocket::Proxy(udp_socket, _) => {
+                let mut _buf = new_udp_header(target).unwrap();
+                let _buf_len = _buf.len();
+                _buf.extend_from_slice(buf);
+                let len = ready!(udp_socket.poll_send(cx, &_buf))?;
+                Poll::Ready(Ok(len - _buf_len))
+            }
+        }
+    }
 }
