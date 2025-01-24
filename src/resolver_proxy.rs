@@ -293,6 +293,7 @@ pub enum ProxyParseError {
     Parse(#[from] ParseError),
 }
 
+#[allow(dead_code)]
 pub enum Socks5UdpSocket {
     Tokio(UdpSocket),
     Proxy(UdpSocket, Socks5Stream<TokioTcpStream>),
