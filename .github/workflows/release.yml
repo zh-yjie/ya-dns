@@ -154,7 +154,7 @@ jobs:
           - x86_64-unknown-freebsd
     steps:
       - name: download upload url
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v4
         with:
           name: upload_url.txt
 
@@ -165,13 +165,13 @@ jobs:
 
       - name: download asset
         if: ${{ matrix.target != 'x86_64-pc-windows-gnu' }}
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v4
         with:
           name: yadns-${{ matrix.target }}
 
       - name: download asset
         if: ${{ matrix.target == 'x86_64-pc-windows-gnu' }}
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v4
         with:
           name: yadns-${{ matrix.target }}.exe
 
