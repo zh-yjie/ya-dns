@@ -101,10 +101,7 @@ impl Handler {
             Some(lookup) => Ok(lookup),
             None => {
                 let builder = MessageResponseBuilder::from_message_request(request);
-                let mut header = Header::response_from_request(request.header());
-                header.set_recursion_available(true);
-                header.set_response_code(ResponseCode::NXDomain);
-                let response = builder.build(header, &[], &[], vec![], &[]);
+                let response = builder.error_msg(request.header(), ResponseCode::NXDomain);
                 Ok(responder.send_response(response).await?)
             }
         }
