@@ -1,22 +1,15 @@
 use crate::{config::RuleAction, filter, handler_config::HandlerConfig, logger::stderr};
-use async_recursion::async_recursion;
-use futures::{
-    future::{self, MapErr, MapOk},
-    Future, FutureExt, TryFutureExt,
-};
-use hickory_proto::op::Query;
-use hickory_resolver::{
-    error::{ResolveError, ResolveErrorKind},
-    lookup::Lookup,
-};
+use crossbeam_channel::bounded;
+use hickory_resolver::error::ResolveError;
 use hickory_server::{
     authority::MessageResponseBuilder,
     proto::op::{Header, MessageType, OpCode, ResponseCode},
     server::{Request, RequestHandler, ResponseHandler, ResponseInfo},
 };
 use once_cell::sync::OnceCell;
-use slog::{debug, error};
-use std::pin::Pin;
+use slog::debug;
+use std::thread;
+use tokio::runtime::Runtime;
 
 static HANDLER_CONFIG: OnceCell<HandlerConfig> = OnceCell::new();
 
@@ -50,99 +43,68 @@ impl Handler {
     ) -> Result<ResponseInfo, ResolveError> {
         //self.counter.fetch_add(1, Ordering::SeqCst);
         let resolvers = filter::resolvers(handler_config(), request.query());
-        let tasks: Vec<_> = resolvers
-            .into_iter()
+        let resolvers_len = resolvers.len();
+        let (tx, rx) = bounded(resolvers_len);
+        resolvers
+            .iter()
             .map(|name| {
-                let domain1 = request.query().name().to_string();
-                let domain2 = request.query().name().to_string();
-                let query_type = request.query().query_type();
-                let name1 = name.to_string();
-                let name2 = name.to_string();
-                let rs = handler_config().resolvers.get(name);
-                rs.unwrap()
-                    .resolve(domain1, query_type)
-                    .boxed()
-                    .map_ok(move |resp| (domain2, name1, resp))
-                    .map_err(move |e| (name2, e))
+                (
+                    name.to_owned(),
+                    request.query().name().to_string(),
+                    request.query().query_type(),
+                )
             })
-            .collect();
-
-        #[async_recursion]
-        async fn process_all(
-            handler: &Handler,
-            error: Option<ResolveError>,
-            tasks: Vec<
-                MapErr<
-                    MapOk<
-                        Pin<
-                            Box<dyn Future<Output = Result<Lookup, ResolveError>> + 'static + Send>,
-                        >,
-                        impl FnOnce(Lookup) -> (String, String, Lookup) + 'static + Send,
-                    >,
-                    impl FnOnce(ResolveError) -> (String, ResolveError) + 'static + Send,
-                >,
-            >,
-        ) -> Result<Lookup, ResolveError> {
-            // responses that are not received yet
-            if tasks.is_empty() {
-                Err(error.unwrap_or(
-                    ResolveErrorKind::NoRecordsFound {
-                        query: Box::new(Query::new()),
-                        soa: *Box::new(None),
-                        negative_ttl: None,
-                        response_code: ResponseCode::NXDomain,
-                        trusted: false,
-                    }
-                    .into(),
-                ))
-            } else {
-                match future::select_all(tasks).await {
-                    (Ok((domain, name, resp)), _index, remaining) => {
-                        //debug!(STDERR, "DNS {} result {:?}", name, resp);
-                        match filter::check_response(handler_config(), &domain, &name, &resp) {
-                            RuleAction::Accept => {
-                                // Ignore the remaining future
-                                tokio::spawn(future::join_all(remaining).map(|_| ()));
-                                debug!(stderr(), "Use result from {}", name);
-                                Ok(resp)
+            .for_each(|(name, domain, query_type)| {
+                let tx1 = tx.clone();
+                thread::spawn(move || {
+                    let io_loop = Runtime::new().unwrap();
+                    let rs = handler_config().resolvers.get(name);
+                    let lookup = io_loop.block_on(rs.unwrap().resolve(&domain, query_type));
+                    match lookup {
+                        Ok(lookup) => {
+                            match filter::check_response(handler_config(), &domain, &name, &lookup)
+                            {
+                                RuleAction::Accept => {
+                                    let _ = tx1.try_send(Some((lookup, name)));
+                                }
+                                RuleAction::Drop => {
+                                    let _ = tx1.try_send(None);
+                                }
                             }
-                            RuleAction::Drop => process_all(handler, None, remaining).await,
+                        }
+                        Err(_) => {
+                            let _ = tx1.try_send(None);
                         }
                     }
-                    (Err((name, e)), _index, remaining) => {
-                        error!(stderr(), "{}: {}", name, e);
-                        process_all(handler, Some(e), remaining).await
-                    }
+                });
+            });
+
+        let mut lookup_result = None;
+        for _ in 0..resolvers_len {
+            let lookup = rx.recv().unwrap();
+            match lookup {
+                Some((lookup, name)) => {
+                    debug!(stderr(), "Use result from {}", name);
+                    drop(tx);
+                    let records = lookup.records();
+                    let builder = MessageResponseBuilder::from_message_request(request);
+                    let mut header = Header::response_from_request(request.header());
+                    header.set_recursion_available(true);
+                    let response = builder.build(header, records.iter(), &[], &[], &[]);
+                    lookup_result = Some(responder.send_response(response).await?);
+                    break;
                 }
+                None => {}
             }
         }
-
-        let builder = MessageResponseBuilder::from_message_request(request);
-        let mut header = Header::response_from_request(request.header());
-        header.set_recursion_available(true);
-        match process_all(self, None, tasks).await {
-            Ok(lookup) => {
-                let records = lookup.records();
-                let response = builder.build(header, records.iter(), &[], &[], &[]);
-                Ok(responder.send_response(response).await?)
-            }
-            Err(e) => {
-                let (soa, response_code) = match e.kind() {
-                    ResolveErrorKind::NoRecordsFound {
-                        query: _,
-                        ref soa,
-                        negative_ttl: _,
-                        response_code,
-                        trusted: _,
-                    } => (soa.clone(), *response_code),
-                    _ => (*Box::new(None), ResponseCode::ServFail),
-                };
-                header.set_response_code(response_code);
-                let soa = &match soa {
-                    Some(soa) => vec![soa.as_ref().to_owned().into_record_of_rdata()],
-                    None => vec![],
-                }[..];
-                let response = builder.build(header, &[], &[], soa, &[]);
+        match lookup_result {
+            Some(lookup) => Ok(lookup),
+            None => {
+                let builder = MessageResponseBuilder::from_message_request(request);
+                let mut header = Header::response_from_request(request.header());
+                header.set_recursion_available(true);
+                header.set_response_code(ResponseCode::NXDomain);
+                let response = builder.build(header, &[], &[], vec![], &[]);
                 Ok(responder.send_response(response).await?)
             }
         }
