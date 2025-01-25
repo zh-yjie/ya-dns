@@ -121,9 +121,7 @@ impl Handler {
         // make sure the request is a query and the message type is a query
         if request.op_code() != OpCode::Query || request.message_type() != MessageType::Query {
             let builder = MessageResponseBuilder::from_message_request(request);
-            let mut header = Header::response_from_request(request.header());
-            header.set_response_code(ResponseCode::Refused);
-            let res = builder.build_no_records(header);
+            let res = builder.error_msg(request.header(), ResponseCode::Refused);
             return Ok(response.send_response(res).await?);
         }
 
