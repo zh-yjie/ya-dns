@@ -72,7 +72,7 @@ pub async fn connect_tcp(
             ProxyProtocol::Http => {
                 use async_http_proxy::{http_connect_tokio, http_connect_tokio_with_basic_auth};
 
-                let mut tcp = tokio::net::TcpStream::connect(proxy.server).await?;
+                let mut tcp = TokioTcpStream::connect(proxy.server).await?;
 
                 if let Some(user) = proxy.username.as_deref() {
                     http_connect_tokio_with_basic_auth(
@@ -121,29 +121,28 @@ pub async fn bind_udp(
                 } else {
                     None
                 };
-                let backing_socket = block_on(tokio::net::TcpStream::connect(proxy.server))?;
-                let mut proxy_stream = block_on(Socks5Stream::use_stream(
-                    backing_socket,
-                    auth,
-                    Config::default(),
-                ))
-                .unwrap();
-                let client_src = TargetAddr::Ip("[::]:0".parse().unwrap());
-                let proxy_addr =
-                    block_on(proxy_stream.request(Socks5Command::UDPAssociate, client_src))
+                let server = proxy.server.clone();
+                let (udp_socket, proxy_stream) = block_on(async move {
+                    let backing_socket = TokioTcpStream::connect(server).await.unwrap();
+                    let mut proxy_stream =
+                        Socks5Stream::use_stream(backing_socket, auth, Config::default())
+                            .await
+                            .unwrap();
+                    let client_src = TargetAddr::Ip("[::]:0".parse().unwrap());
+                    let proxy_addr = proxy_stream
+                        .request(Socks5Command::UDPAssociate, client_src)
+                        .await
                         .unwrap();
-                let proxy_addr_resolved = proxy_addr.to_socket_addrs().unwrap().next().unwrap();
-                let udp_socket = tokio::net::UdpSocket::bind(local_addr).await?;
-                block_on(udp_socket.connect(proxy_addr_resolved))?;
+                    let proxy_addr_resolved = proxy_addr.to_socket_addrs().unwrap().next().unwrap();
+                    let udp_socket = UdpSocket::bind(local_addr).await.unwrap();
+                    let _ = udp_socket.connect(proxy_addr_resolved).await;
+                    (udp_socket, proxy_stream)
+                });
                 Ok(Socks5UdpSocket::Proxy(udp_socket, proxy_stream))
             }
-            _ => Ok(Socks5UdpSocket::Tokio(
-                tokio::net::UdpSocket::bind(local_addr).await?,
-            )),
+            _ => Ok(Socks5UdpSocket::Tokio(UdpSocket::bind(local_addr).await?)),
         },
-        None => Ok(Socks5UdpSocket::Tokio(
-            tokio::net::UdpSocket::bind(local_addr).await?,
-        )),
+        None => Ok(Socks5UdpSocket::Tokio(UdpSocket::bind(local_addr).await?)),
     }
 }
 
