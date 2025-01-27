@@ -1,8 +1,6 @@
-use crate::config::Upstream;
 use crate::config::{Config, RequestRule, ResponseRule};
 use crate::domain::DomainSuffix;
 use crate::ip::IpRange;
-use crate::resolver;
 use crate::resolver::RecursiveResolver;
 use hickory_resolver::config::ResolverOpts;
 use regex::RegexSet;
@@ -35,52 +33,7 @@ impl From<Config> for HandlerConfig {
         let resolvers: HashMap<_, _> = config
             .upstreams
             .iter()
-            .map(|(name, upstream)| {
-                (
-                    name.to_owned(),
-                    match upstream {
-                        Upstream::TcpUpstream { address, proxy } => {
-                            Arc::new(resolver::tcp_resolver(address, opts.to_owned(), proxy))
-                        }
-                        Upstream::UdpUpstream { address, proxy } => {
-                            Arc::new(resolver::udp_resolver(address, opts.to_owned(), proxy))
-                        }
-                        #[cfg(feature = "dns-over-tls")]
-                        Upstream::TlsUpstream {
-                            address,
-                            tls_host,
-                            proxy,
-                        } => Arc::new(resolver::tls_resolver(
-                            address,
-                            tls_host,
-                            opts.to_owned(),
-                            proxy,
-                        )),
-                        #[cfg(feature = "dns-over-https")]
-                        Upstream::HttpsUpstream {
-                            address,
-                            tls_host,
-                            proxy,
-                        } => Arc::new(resolver::https_resolver(
-                            address,
-                            tls_host,
-                            opts.to_owned(),
-                            proxy,
-                        )),
-                        #[cfg(feature = "dns-over-h3")]
-                        Upstream::H3Upstream {
-                            address,
-                            tls_host,
-                            proxy,
-                        } => Arc::new(resolver::h3_resolver(
-                            address,
-                            tls_host,
-                            opts.to_owned(),
-                            proxy,
-                        )),
-                    },
-                )
-            })
+            .map(|(name, upstream)| (name.to_owned(), Arc::new((upstream, &opts).into())))
             .collect();
 
         let domains: HashMap<_, _> = config

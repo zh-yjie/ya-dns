@@ -3,8 +3,8 @@ use hickory_resolver::config::{NameServerConfig, Protocol, ResolverConfig, Resol
 use hickory_resolver::error::ResolveError;
 use hickory_resolver::lookup::Lookup;
 use hickory_resolver::AsyncResolver;
-use std::net::SocketAddr;
 
+use crate::config::Upstream;
 use crate::resolver_runtime_provider::{ProxyConnectionProvider, ProxyRuntimeProvider};
 
 #[derive(Clone, Debug)]
@@ -37,90 +37,47 @@ impl RecursiveResolver {
     }
 }
 
-pub fn udp_resolver(
-    address: &Vec<SocketAddr>,
-    options: ResolverOpts,
-    proxy: &Option<String>,
-) -> RecursiveResolver {
-    let mut resolver_config = ResolverConfig::new();
-    address.iter().for_each(|addr| {
-        resolver_config.add_name_server(NameServerConfig::new(*addr, Protocol::Udp));
-    });
-    let runtime_provider = ProxyRuntimeProvider::new(proxy.to_owned().map(|p| p.parse().unwrap()));
-    let provider = ProxyConnectionProvider::new(runtime_provider);
-    RecursiveResolver::new(resolver_config, options, provider)
-}
-
-pub fn tcp_resolver(
-    address: &Vec<SocketAddr>,
-    options: ResolverOpts,
-    proxy: &Option<String>,
-) -> RecursiveResolver {
-    let mut resolver_config = ResolverConfig::new();
-    address.iter().for_each(|addr| {
-        resolver_config.add_name_server(NameServerConfig::new(*addr, Protocol::Tcp));
-    });
-    let runtime_provider = ProxyRuntimeProvider::new(proxy.to_owned().map(|p| p.parse().unwrap()));
-    let provider = ProxyConnectionProvider::new(runtime_provider);
-    RecursiveResolver::new(resolver_config, options, provider)
-}
-
-#[cfg(feature = "dns-over-tls")]
-pub fn tls_resolver(
-    address: &Vec<SocketAddr>,
-    tls_host: &String,
-    options: ResolverOpts,
-    proxy: &Option<String>,
-) -> RecursiveResolver {
-    let mut resolver_config = ResolverConfig::new();
-    address.iter().for_each(|addr| {
-        let mut name_server_config = NameServerConfig::new(*addr, Protocol::Tls);
-        name_server_config.tls_dns_name = Some(tls_host.to_owned());
-        resolver_config.add_name_server(name_server_config);
-    });
-    let runtime_provider = ProxyRuntimeProvider::new(proxy.to_owned().map(|p| p.parse().unwrap()));
-    let provider = ProxyConnectionProvider::new(runtime_provider);
-    RecursiveResolver::new(resolver_config, options, provider)
-}
-
-#[cfg(feature = "dns-over-https")]
-pub fn https_resolver(
-    address: &Vec<SocketAddr>,
-    tls_host: &String,
-    options: ResolverOpts,
-    proxy: &Option<String>,
-) -> RecursiveResolver {
-    let mut resolver_config = ResolverConfig::new();
-    address.iter().for_each(|addr| {
-        let mut name_server_config = NameServerConfig::new(*addr, Protocol::Https);
-        name_server_config.tls_dns_name = Some(tls_host.to_owned());
-        resolver_config.add_name_server(name_server_config);
-    });
-    let runtime_provider = ProxyRuntimeProvider::new(proxy.to_owned().map(|p| p.parse().unwrap()));
-    let provider = ProxyConnectionProvider::new(runtime_provider);
-    RecursiveResolver::new(resolver_config, options, provider)
-}
-
-#[cfg(feature = "dns-over-h3")]
-pub fn h3_resolver(
-    address: &Vec<SocketAddr>,
-    tls_host: &String,
-    options: ResolverOpts,
-    proxy: &Option<String>,
-) -> RecursiveResolver {
-    let mut resolver_config = ResolverConfig::new();
-    address.iter().for_each(|addr| {
-        let mut name_server_config = NameServerConfig::new(*addr, Protocol::H3);
-        name_server_config.tls_dns_name = Some(tls_host.to_owned());
-        resolver_config.add_name_server(name_server_config);
-    });
-    let runtime_provider = ProxyRuntimeProvider::new(proxy.to_owned().map(|p| p.parse().unwrap()));
-    let provider = ProxyConnectionProvider::new(runtime_provider);
-    RecursiveResolver::new(resolver_config, options, provider)
+impl From<(&Upstream, &ResolverOpts)> for RecursiveResolver {
+    fn from((upstream, options): (&Upstream, &ResolverOpts)) -> Self {
+        let (protocol, address, tls_host, proxy) = match upstream {
+            Upstream::UdpUpstream { address, proxy } => (Protocol::Udp, address, None, proxy),
+            Upstream::TcpUpstream { address, proxy } => (Protocol::Tcp, address, None, proxy),
+            #[cfg(feature = "dns-over-tls")]
+            Upstream::TlsUpstream {
+                address,
+                tls_host,
+                proxy,
+            } => (Protocol::Tls, address, Some(tls_host.to_owned()), proxy),
+            #[cfg(feature = "dns-over-https")]
+            Upstream::HttpsUpstream {
+                address,
+                tls_host,
+                proxy,
+            } => (Protocol::Https, address, Some(tls_host.to_owned()), proxy),
+            #[cfg(feature = "dns-over-h3")]
+            Upstream::H3Upstream {
+                address,
+                tls_host,
+                proxy,
+            } => (Protocol::H3, address, Some(tls_host.to_owned()), proxy),
+        };
+        let mut resolver_config = ResolverConfig::new();
+        address.iter().for_each(|addr| {
+            let mut name_server_config = NameServerConfig::new(*addr, protocol);
+            name_server_config.tls_dns_name = tls_host.to_owned();
+            resolver_config.add_name_server(name_server_config);
+        });
+        let runtime_provider =
+            ProxyRuntimeProvider::new(proxy.to_owned().map(|p| p.parse().unwrap()));
+        let provider = ProxyConnectionProvider::new(runtime_provider);
+        RecursiveResolver::new(resolver_config, options.to_owned(), provider)
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::net::SocketAddr;
+
     use tokio::runtime::Runtime;
 
     use super::*;
@@ -129,7 +86,14 @@ mod tests {
     fn udp_resolver_test() {
         let dns_addr = "8.8.8.8:53".parse::<SocketAddr>().unwrap();
         let io_loop = Runtime::new().unwrap();
-        let resolver = udp_resolver(&vec![dns_addr], ResolverOpts::default(), &None);
+        let resolver: RecursiveResolver = (
+            &Upstream::UdpUpstream {
+                address: vec![dns_addr],
+                proxy: None,
+            },
+            &ResolverOpts::default(),
+        )
+            .into();
         let lookup_future = resolver.resolve("dns.google", RecordType::A);
         let response = io_loop.block_on(lookup_future).unwrap();
         assert!(response
@@ -141,7 +105,14 @@ mod tests {
     fn tcp_resolver_test() {
         let dns_addr = "8.8.8.8:53".parse::<SocketAddr>().unwrap();
         let io_loop = Runtime::new().unwrap();
-        let resolver = tcp_resolver(&vec![dns_addr], ResolverOpts::default(), &None);
+        let resolver: RecursiveResolver = (
+            &Upstream::TcpUpstream {
+                address: vec![dns_addr],
+                proxy: None,
+            },
+            &ResolverOpts::default(),
+        )
+            .into();
         let lookup_future = resolver.resolve("dns.google", RecordType::A);
         let response = io_loop.block_on(lookup_future).unwrap();
         assert!(response
@@ -155,7 +126,15 @@ mod tests {
         let dns_addr = "8.8.8.8:853".parse::<SocketAddr>().unwrap();
         let dns_host = String::from("dns.google");
         let io_loop = Runtime::new().unwrap();
-        let resolver = tls_resolver(&vec![dns_addr], &dns_host, ResolverOpts::default(), &None);
+        let resolver: RecursiveResolver = (
+            &Upstream::TlsUpstream {
+                address: vec![dns_addr],
+                proxy: None,
+                tls_host: dns_host,
+            },
+            &ResolverOpts::default(),
+        )
+            .into();
         let lookup_future = resolver.resolve("dns.google", RecordType::A);
         let response = io_loop.block_on(lookup_future).unwrap();
         assert!(response
@@ -169,7 +148,15 @@ mod tests {
         let dns_addr = "8.8.8.8:443".parse::<SocketAddr>().unwrap();
         let dns_host = String::from("dns.google");
         let io_loop = Runtime::new().unwrap();
-        let resolver = https_resolver(&vec![dns_addr], &dns_host, ResolverOpts::default(), &None);
+        let resolver: RecursiveResolver = (
+            &Upstream::HttpsUpstream {
+                address: vec![dns_addr],
+                proxy: None,
+                tls_host: dns_host,
+            },
+            &ResolverOpts::default(),
+        )
+            .into();
         let lookup_future = resolver.resolve("dns.google", RecordType::A);
         let response = io_loop.block_on(lookup_future).unwrap();
         assert!(response
@@ -183,7 +170,15 @@ mod tests {
         let dns_addr = "8.8.8.8:443".parse::<SocketAddr>().unwrap();
         let dns_host = String::from("dns.google");
         let io_loop = Runtime::new().unwrap();
-        let resolver = h3_resolver(&vec![dns_addr], &dns_host, ResolverOpts::default(), &None);
+        let resolver: RecursiveResolver = (
+            &Upstream::H3Upstream {
+                address: vec![dns_addr],
+                proxy: None,
+                tls_host: dns_host,
+            },
+            &ResolverOpts::default(),
+        )
+            .into();
         let lookup_future = resolver.resolve("dns.google", RecordType::A);
         let response = io_loop.block_on(lookup_future).unwrap();
         assert!(response
