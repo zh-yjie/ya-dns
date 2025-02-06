@@ -1,11 +1,10 @@
 use crate::{
     config::{RequestRule, ResponseRule, RuleAction},
-    handler_config::HandlerConfig,
-    logger::stderr,
+    handler_config::HandlerConfig
 };
 use hickory_proto::{op::LowerQuery, rr::RecordType};
 use hickory_resolver::lookup::Lookup;
-use slog::debug;
+use log::debug;
 
 pub fn check_response(
     cfg: &HandlerConfig,
@@ -72,7 +71,7 @@ pub fn check_response(
         .unwrap_or(RuleAction::Accept)
 }
 
-pub fn resolvers<'a>(cfg: &'a HandlerConfig, query: &LowerQuery) -> Vec<&'a str> {
+pub fn resolvers(cfg: &HandlerConfig, query: &LowerQuery) -> Vec<String> {
     let name = query.name().to_string();
 
     let check_type = |rule: &RequestRule| {
@@ -88,12 +87,12 @@ pub fn resolvers<'a>(cfg: &'a HandlerConfig, query: &LowerQuery) -> Vec<&'a str>
         .find(|r| check_domains(cfg, &name, &r.domains) && check_type(r));
 
     if let Some(rule) = rule {
-        debug!(stderr(), "Query {} matches rule {:?}", name, rule);
-        rule.upstreams.iter().map(String::as_str).collect()
+        debug!("Query {} matches rule {:?}", name, rule);
+        rule.upstreams.iter().map(String::clone).collect()
     } else {
-        debug!(stderr(), "No rule matches for {}. Use defaults.", name);
+        debug!("No rule matches for {}. Use defaults.", name);
         // If no rule matches, use defaults
-        cfg.defaults.iter().map(String::as_str).collect()
+        cfg.defaults.iter().map(String::clone).collect()
     }
 }
 

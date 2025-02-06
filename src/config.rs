@@ -20,7 +20,11 @@ pub enum ConfigError {
     NoUpstream,
     #[error("{0}:{1}")]
     InvalidAddress(std::net::AddrParseError, String),
-    #[cfg(any(feature = "dns-over-tls", feature = "dns-over-https", feature = "dns-over-h3"))]
+    #[cfg(any(
+        feature = "dns-over-tls",
+        feature = "dns-over-https",
+        feature = "dns-over-h3"
+    ))]
     #[error("tls-host is missing")]
     NoTlsHost,
 }
@@ -28,6 +32,8 @@ pub enum ConfigError {
 #[derive(Debug)]
 pub struct Config {
     pub bind: SocketAddr,
+    #[cfg(feature = "logging")]
+    pub log_level: log::LevelFilter,
     pub default_upstreams: Vec<String>,
     pub resolver_opts: ResolverOpts,
     pub upstreams: HashMap<String, Upstream>,
@@ -37,9 +43,11 @@ pub struct Config {
     pub response_rules: Vec<ResponseRule>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct ConfigBuilder {
     bind: SocketAddr,
+    log: Option<String>,
     resolver_opts: Option<ResolverOptsConfig>,
     upstreams: HashMap<String, UpstreamConfig>,
     domains: Option<HashMap<String, DomainsConf>>,
@@ -133,6 +141,12 @@ impl ConfigBuilder {
 
         Ok(Config {
             bind: self.bind,
+            #[cfg(feature = "logging")]
+            log_level: self
+                .log
+                .as_ref()
+                .map(|s| log::LevelFilter::from_str(s).unwrap_or(log::LevelFilter::Info))
+                .unwrap_or(log::LevelFilter::Info),
             default_upstreams,
             resolver_opts,
             upstreams,
@@ -199,7 +213,11 @@ pub struct UpstreamConfig {
     address: Vec<String>,
     network: NetworkType,
     proxy: Option<String>,
-    #[cfg(any(feature = "dns-over-tls", feature = "dns-over-https", feature = "dns-over-h3"))]
+    #[cfg(any(
+        feature = "dns-over-tls",
+        feature = "dns-over-https",
+        feature = "dns-over-h3"
+    ))]
     #[serde(rename = "tls-host")]
     tls_host: Option<String>,
     #[serde(default = "UpstreamConfig::default_default")]
@@ -361,7 +379,10 @@ impl DomainsConf {
                 };
                 regex_set.push(dm);
             } else {
-                let line1 = line.trim_start_matches("full:").trim_start_matches("domain:").trim_start_matches(".");
+                let line1 = line
+                    .trim_start_matches("full:")
+                    .trim_start_matches("domain:")
+                    .trim_start_matches(".");
                 let dm = match line1.find(":@") {
                     Some(index) => line1[..index].to_string(),
                     None => String::from(line1),

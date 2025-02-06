@@ -3,6 +3,9 @@
 # Root privilege may be required if you specify a port below 1024.
 bind = "127.0.0.1:5300" # the address that ya-dns listens on
 
+# Specify the log level
+log = "info" # error warn info debug trace
+
 # Configuration for the Resolver
 [resolver_opts]
 # Specify the timeout for a request. Defaults to 5 seconds
