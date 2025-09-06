@@ -2,11 +2,8 @@ use std::time::Duration;
 
 use crate::{config::RuleAction, filter, handler_config::HandlerConfig};
 use crossbeam_channel::bounded;
-use hickory_proto::op::LowerQuery;
-use hickory_resolver::{
-    error::{ResolveError, ResolveErrorKind},
-    lookup::Lookup,
-};
+use hickory_proto::{op::LowerQuery, ProtoErrorKind};
+use hickory_resolver::{lookup::Lookup, ResolveError, ResolveErrorKind};
 use hickory_server::{
     authority::MessageResponseBuilder,
     proto::op::{Header, MessageType, OpCode, ResponseCode},
@@ -35,7 +32,8 @@ impl Handler {
 
     /// Handle request, returning ResponseInfo if response was successfully sent, or an error.
     async fn do_handle_request(&self, request: &Request) -> Result<RequestResult, ResolveError> {
-        debug!("DNS requests are forwarded to [{}].", request.query());
+        let query = &request.queries()[0];
+        debug!("DNS requests are forwarded to [{}].", query);
         // make sure the request is a query and the message type is a query
         if request.op_code() != OpCode::Query || request.message_type() != MessageType::Query {
             return Ok(RequestResult {
@@ -43,7 +41,7 @@ impl Handler {
                 code: ResponseCode::Refused,
             });
         }
-        self.lookup(request.query()).await
+        self.lookup(query).await
     }
 
     /// Lookup for anything else (NXDOMAIN)
@@ -68,10 +66,12 @@ impl Handler {
                 let tx1 = tx.clone();
                 rt.spawn(async move {
                     let res =
-                        timeout(Duration::from_secs(1), rs.resolve(&domain, query_type)).await;
+                        timeout(Duration::from_secs(5), rs.resolve(&domain, query_type)).await;
                     let lookup = match res {
                         Ok(lookup) => lookup,
-                        Err(_) => Err(ResolveErrorKind::Timeout.into()),
+                        Err(_) => {
+                            Err(ResolveErrorKind::Proto(ProtoErrorKind::Timeout.into()).into())
+                        }
                     };
                     match lookup {
                         Ok(lookup) => {
@@ -123,15 +123,21 @@ impl RequestHandler for Handler {
         mut response: R,
     ) -> ResponseInfo {
         // try to handle request
-        let result = match self.do_handle_request(request).await {
-            Ok(info) => info,
-            Err(e) => {
-                debug!("Error in RequestHandler:{:#?}", e);
-                RequestResult {
-                    lookup: None,
-                    code: ResponseCode::ServFail,
+        let result = match request.queries().len() > 0 {
+            true => match self.do_handle_request(request).await {
+                Ok(info) => info,
+                Err(e) => {
+                    debug!("Error in RequestHandler:{:#?}", e);
+                    RequestResult {
+                        lookup: None,
+                        code: ResponseCode::ServFail,
+                    }
                 }
-            }
+            },
+            false => RequestResult {
+                lookup: None,
+                code: ResponseCode::FormErr,
+            },
         };
         let records = result
             .lookup

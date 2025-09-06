@@ -1,15 +1,15 @@
 use hickory_proto::rr::RecordType;
-use hickory_resolver::config::{NameServerConfig, Protocol, ResolverConfig, ResolverOpts};
-use hickory_resolver::error::ResolveError;
+use hickory_proto::xfer::Protocol;
+use hickory_resolver::config::{NameServerConfig, ResolverConfig, ResolverOpts};
 use hickory_resolver::lookup::Lookup;
-use hickory_resolver::AsyncResolver;
+use hickory_resolver::{ResolveError, Resolver};
 
 use crate::config::Upstream;
 use crate::resolver_runtime_provider::{ProxyConnectionProvider, ProxyRuntimeProvider};
 
 #[derive(Clone, Debug)]
 pub struct RecursiveResolver {
-    pub resolver: AsyncResolver<ProxyConnectionProvider>,
+    pub resolver: Resolver<ProxyConnectionProvider>,
 }
 
 impl RecursiveResolver {
@@ -18,7 +18,9 @@ impl RecursiveResolver {
         options: ResolverOpts,
         provider: ProxyConnectionProvider,
     ) -> Self {
-        let resolver = AsyncResolver::new(resolver_config, options, provider);
+        let mut builder = Resolver::builder_with_config(resolver_config, provider);
+        *builder.options_mut() = options;
+        let resolver = builder.build();
         RecursiveResolver { resolver }
     }
 
@@ -98,7 +100,7 @@ mod tests {
         let response = io_loop.block_on(lookup_future).unwrap();
         assert!(response
             .record_iter()
-            .any(|r| r.data().unwrap().to_string().eq("8.8.8.8")));
+            .any(|r| r.data().to_string().eq("8.8.8.8")));
     }
 
     #[test]
@@ -117,7 +119,7 @@ mod tests {
         let response = io_loop.block_on(lookup_future).unwrap();
         assert!(response
             .record_iter()
-            .any(|r| r.data().unwrap().to_string().eq("8.8.8.8")));
+            .any(|r| r.data().to_string().eq("8.8.8.8")));
     }
 
     #[cfg(feature = "dns-over-tls")]
@@ -139,7 +141,7 @@ mod tests {
         let response = io_loop.block_on(lookup_future).unwrap();
         assert!(response
             .record_iter()
-            .any(|r| r.data().unwrap().to_string().eq("8.8.8.8")));
+            .any(|r| r.data().to_string().eq("8.8.8.8")));
     }
 
     #[cfg(feature = "dns-over-https")]
@@ -161,7 +163,7 @@ mod tests {
         let response = io_loop.block_on(lookup_future).unwrap();
         assert!(response
             .record_iter()
-            .any(|r| r.data().unwrap().to_string().eq("8.8.8.8")));
+            .any(|r| r.data().to_string().eq("8.8.8.8")));
     }
 
     #[cfg(feature = "dns-over-h3")]
@@ -183,6 +185,6 @@ mod tests {
         let response = io_loop.block_on(lookup_future).unwrap();
         assert!(response
             .record_iter()
-            .any(|r| r.data().unwrap().to_string().eq("8.8.8.8")));
+            .any(|r| r.data().to_string().eq("8.8.8.8")));
     }
 }

@@ -2,32 +2,29 @@
 authors = ["zyj"]
 edition = "2021"
 name = "yadns"
-version = "0.6.6"
+version = "0.7.0"
 
 [features]
-default = ["default-doh-rustls", "default-doh3-rustls", "logging"]
+default = ["default-doh", "default-doh3", "logging"]
 
-default-doh-rustls = [
-  "default-dot-rustls",
-  "dns-over-https",
-  "hickory-resolver/dns-over-https-rustls"
+default-doh = [
+  "default-dot",
+  "dns-over-https"
 ]
-default-dot-openssl = ["dns-over-tls", "hickory-resolver/dns-over-openssl"]
-default-dot-rustls = [
+default-dot = [
   "dns-over-tls",
-  "hickory-resolver/dns-over-rustls",
   "hickory-resolver/webpki-roots",
-  "hickory-resolver/native-certs",
+  "hickory-resolver/rustls-platform-verifier"
 ]
-default-doh3-rustls = [
-  "default-dot-rustls",
+default-doh3 = [
+  "default-dot",
   "dns-over-h3"
 ]
 default-tcp_udp = []
 
-dns-over-https = ["hickory-resolver/dns-over-https"]
-dns-over-tls = ["hickory-resolver/dns-over-tls"]
-dns-over-h3 = ["hickory-resolver/dns-over-h3"]
+dns-over-https = ["hickory-resolver/https-ring"]
+dns-over-tls = ["hickory-resolver/tls-ring"]
+dns-over-h3 = ["dep:quinn", "hickory-resolver/h3-ring"]
 logging = ["dep:env_logger"]
 
 [dependencies]
@@ -39,19 +36,20 @@ crossbeam-channel = "0.5"
 env_logger = {version = "0.11", optional = true}
 fast-socks5 = "0.10"
 futures = {version = "0.3", default-features = false, features = ["executor"]}
-hickory-proto = "0.24"
-hickory-resolver = {version = "0.24", default-features = false, features = ["tokio-runtime"]}
-hickory-server = "0.24"
+hickory-proto = "0.25"
+hickory-resolver = {version = "0.25", default-features = false, features = ["tokio"]}
+hickory-server = "0.25"
 ipnet = "2"
 iprange = "0.6"
 log = "0.4"
 publicsuffix = "2"
+quinn = {version = "0.11.9", optional = true}
 regex = "1"
 serde = "1"
 serde_derive = "1"
 thiserror = "1"
 tokio = "1"
-toml = "0.8"
+toml = "0.9"
 url = "2"
 
 [profile.release]

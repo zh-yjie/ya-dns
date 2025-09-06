@@ -8,9 +8,8 @@ use fast_socks5::AuthenticationMethod;
 use fast_socks5::Socks5Command;
 use futures::executor::block_on;
 use futures::ready;
+use hickory_proto::runtime::TokioTime;
 use hickory_proto::udp::DnsUdpSocket;
-use hickory_proto::udp::QuicLocalAddr;
-use hickory_proto::TokioTime;
 use std::net::ToSocketAddrs;
 use std::task::Context;
 use std::task::Poll;
@@ -296,17 +295,6 @@ pub enum ProxyParseError {
 pub enum Socks5UdpSocket {
     Tokio(UdpSocket),
     Proxy(UdpSocket, Socks5Stream<TokioTcpStream>),
-}
-
-unsafe impl Send for Socks5UdpSocket {}
-
-impl QuicLocalAddr for Socks5UdpSocket {
-    fn local_addr(&self) -> std::io::Result<SocketAddr> {
-        match self {
-            Socks5UdpSocket::Tokio(udp_socket) => udp_socket.local_addr(),
-            Socks5UdpSocket::Proxy(udp_socket, _) => udp_socket.local_addr(),
-        }
-    }
 }
 
 #[async_trait]

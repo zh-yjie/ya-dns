@@ -1,3 +1,7 @@
+# 0.7.0
+
+- update hickory-dns to 0.25
+
 # 0.6.0
 
 - add dns over http3 support

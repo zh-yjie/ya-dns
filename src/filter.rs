@@ -43,11 +43,11 @@ pub fn check_response(
                                 .iter()
                                 .filter_map(|rec| match rec.record_type() {
                                     RecordType::A => {
-                                        let ip = rec.data().unwrap().as_a().unwrap().0;
+                                        let ip = rec.data().as_a().unwrap().0;
                                         Some(range.contains((ip).into()))
                                     }
                                     RecordType::AAAA => {
-                                        let ip = rec.data().unwrap().as_aaaa().unwrap().0;
+                                        let ip = rec.data().as_aaaa().unwrap().0;
                                         Some(range.contains((ip).into()))
                                     }
                                     _ => None,
