@@ -1,9 +1,9 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use crate::{config::RuleAction, filter, handler_config::HandlerConfig};
 use crossbeam_channel::bounded;
 use hickory_proto::{
-    op::LowerQuery,
+    op::{LowerQuery, Query},
     rr::{Record, RecordType},
     ProtoErrorKind,
 };
@@ -62,12 +62,13 @@ impl Handler {
                 (
                     config.resolvers.get(&name).cloned().unwrap(),
                     name,
-                    query.name().to_string(),
-                    query.query_type(),
+                    query.name().clone(),
                 )
             })
-            .for_each(|(rs, name, domain, query_type)| {
+            .for_each(|(rs, name, qname)| {
                 let tx1 = tx.clone();
+                let domain = query.name().to_string();
+                let query_type = query.query_type();
                 rt.spawn(async move {
                     let res =
                         timeout(Duration::from_secs(5), rs.resolve(&domain, query_type)).await;
@@ -81,8 +82,19 @@ impl Handler {
                         Ok(lookup) => {
                             let _ = tx1.try_send(Some((lookup, name, domain)));
                         }
-                        Err(_) => {
-                            let _ = tx1.try_send(None);
+                        Err(e) => {
+                            match e.into_soa() {
+                                Some(soa) => {
+                                    let lookup = Lookup::new_with_max_ttl(
+                                        Query::query(qname.into(), query_type),
+                                        Arc::from([soa.clone().into_record_of_rdata()]),
+                                    );
+                                    let _ = tx1.try_send(Some((lookup, name, domain)));
+                                }
+                                None => {
+                                    let _ = tx1.try_send(None);
+                                }
+                            };
                         }
                     }
                 });
@@ -127,21 +139,28 @@ impl RequestHandler for Handler {
         mut response: R,
     ) -> ResponseInfo {
         // try to handle request
-        let result = match request.queries().len() > 0 {
-            true => match self.do_handle_request(request).await {
-                Ok(info) => info,
-                Err(e) => {
-                    debug!("Error in RequestHandler:{:#?}", e);
-                    RequestResult {
-                        lookup: None,
-                        code: ResponseCode::ServFail,
+        let (result, qtype) = if request.queries().len() > 0 {
+            (
+                match self.do_handle_request(request).await {
+                    Ok(info) => info,
+                    Err(e) => {
+                        debug!("Error in RequestHandler:{:#?}", e);
+                        RequestResult {
+                            lookup: None,
+                            code: ResponseCode::ServFail,
+                        }
                     }
-                }
-            },
-            false => RequestResult {
-                lookup: None,
-                code: ResponseCode::FormErr,
-            },
+                },
+                request.queries()[0].query_type(),
+            )
+        } else {
+            (
+                RequestResult {
+                    lookup: None,
+                    code: ResponseCode::FormErr,
+                },
+                RecordType::ZERO,
+            )
         };
         let records = result
             .lookup
@@ -150,20 +169,22 @@ impl RequestHandler for Handler {
         let answers: Vec<Record> = records
             .clone()
             .iter()
-            .filter(|r| r.record_type() != RecordType::NS && r.record_type() != RecordType::SOA)
-            .map(|ns| ns.clone())
+            .filter(|r| {
+                qtype == r.record_type() || (!r.record_type().is_ns() && !r.record_type().is_soa())
+            })
+            .map(|r| r.clone())
             .collect();
         let name_servers: Vec<Record> = records
             .clone()
             .iter()
-            .filter(|r| r.record_type() == RecordType::NS)
-            .map(|ns| ns.clone())
+            .filter(|r| !qtype.is_ns() && r.record_type().is_ns())
+            .map(|r| r.clone())
             .collect();
         let soa: Vec<Record> = records
             .clone()
             .iter()
-            .filter(|r| r.record_type() == RecordType::SOA)
-            .map(|ns| ns.clone())
+            .filter(|r| !qtype.is_soa() && r.record_type().is_soa())
+            .map(|r| r.clone())
             .collect();
         let builder = MessageResponseBuilder::from_message_request(request);
         let mut header = Header::response_from_request(request.header());
