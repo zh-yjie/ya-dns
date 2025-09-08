@@ -2,7 +2,11 @@ use std::time::Duration;
 
 use crate::{config::RuleAction, filter, handler_config::HandlerConfig};
 use crossbeam_channel::bounded;
-use hickory_proto::{op::LowerQuery, ProtoErrorKind};
+use hickory_proto::{
+    op::LowerQuery,
+    rr::{Record, RecordType},
+    ProtoErrorKind,
+};
 use hickory_resolver::{lookup::Lookup, ResolveError, ResolveErrorKind};
 use hickory_server::{
     authority::MessageResponseBuilder,
@@ -143,11 +147,31 @@ impl RequestHandler for Handler {
             .lookup
             .map(move |l| l.records().to_owned())
             .unwrap_or(vec![]);
+        let answers: Vec<Record> = records
+            .clone()
+            .iter()
+            .filter(|r| r.record_type() != RecordType::NS && r.record_type() != RecordType::SOA)
+            .map(|ns| ns.clone())
+            .collect();
+        let name_servers: Vec<Record> = records
+            .clone()
+            .iter()
+            .filter(|r| r.record_type() == RecordType::NS)
+            .map(|ns| ns.clone())
+            .collect();
+        let soa: Vec<Record> = records
+            .clone()
+            .iter()
+            .filter(|r| r.record_type() == RecordType::SOA)
+            .map(|ns| ns.clone())
+            .collect();
         let builder = MessageResponseBuilder::from_message_request(request);
         let mut header = Header::response_from_request(request.header());
         header.set_response_code(result.code);
         header.set_recursion_available(true);
-        let message = builder.build(header, records.iter(), &[], &[], &[]);
+        header.set_answer_count(answers.len().try_into().unwrap_or(0));
+        header.set_name_server_count(name_servers.len().try_into().unwrap_or(0));
+        let message = builder.build(header, answers.iter(), name_servers.iter(), soa.iter(), &[]);
         response.send_response(message).await.unwrap()
     }
 }

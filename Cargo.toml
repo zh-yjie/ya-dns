@@ -12,9 +12,7 @@ default-doh = [
   "dns-over-https"
 ]
 default-dot = [
-  "dns-over-tls",
-  "hickory-resolver/webpki-roots",
-  "hickory-resolver/rustls-platform-verifier"
+  "dns-over-tls"
 ]
 default-doh3 = [
   "default-dot",
@@ -23,7 +21,7 @@ default-doh3 = [
 default-tcp_udp = []
 
 dns-over-https = ["hickory-resolver/https-ring"]
-dns-over-tls = ["hickory-resolver/tls-ring"]
+dns-over-tls = ["hickory-resolver/tls-ring", "hickory-resolver/webpki-roots", "hickory-resolver/rustls-platform-verifier"]
 dns-over-h3 = ["dep:quinn", "hickory-resolver/h3-ring"]
 logging = ["dep:env_logger"]
 
