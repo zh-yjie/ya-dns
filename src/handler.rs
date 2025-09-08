@@ -191,7 +191,7 @@ impl RequestHandler for Handler {
         header.set_response_code(result.code);
         header.set_recursion_available(true);
         header.set_answer_count(answers.len().try_into().unwrap_or(0));
-        header.set_name_server_count(name_servers.len().try_into().unwrap_or(0));
+        header.set_name_server_count(name_servers.len().try_into().unwrap_or(0) + soa.len().try_into().unwrap_or(0));
         let message = builder.build(header, answers.iter(), name_servers.iter(), soa.iter(), &[]);
         response.send_response(message).await.unwrap()
     }
