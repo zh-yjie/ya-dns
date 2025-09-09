@@ -1,25 +1,43 @@
-use std::{sync::Arc, time::Duration};
-
 use crate::{config::RuleAction, filter, handler_config::HandlerConfig};
 use crossbeam_channel::bounded;
-use hickory_proto::{
-    op::{LowerQuery, Query},
-    rr::{Record, RecordType},
-    ProtoErrorKind,
-};
-use hickory_resolver::{lookup::Lookup, ResolveError, ResolveErrorKind};
+use hickory_proto::{op::LowerQuery, rr::Record, ProtoErrorKind};
+use hickory_resolver::{ResolveError, ResolveErrorKind};
 use hickory_server::{
     authority::MessageResponseBuilder,
     proto::op::{Header, MessageType, OpCode, ResponseCode},
     server::{Request, RequestHandler, ResponseHandler, ResponseInfo},
 };
 use log::debug;
+use std::time::Duration;
 use tokio::{runtime::Runtime, time::timeout};
 
 #[derive(Clone, Debug)]
 struct RequestResult {
-    lookup: Option<Lookup>,
+    answers: Option<Vec<Record>>,
+    name_servers: Option<Vec<Record>>,
+    soa: Option<Vec<Record>>,
     code: ResponseCode,
+}
+
+#[allow(dead_code)]
+impl RequestResult {
+    pub fn new_with_code(code: ResponseCode) -> Self {
+        Self {
+            answers: None,
+            name_servers: None,
+            soa: None,
+            code,
+        }
+    }
+    pub fn set_answers(&mut self, answers: Vec<Record>) {
+        self.answers = Some(answers);
+    }
+    pub fn set_name_server(&mut self, name_servers: Vec<Record>) {
+        self.name_servers = Some(name_servers);
+    }
+    pub fn set_soa(&mut self, soa: Vec<Record>) {
+        self.soa = Some(soa);
+    }
 }
 
 /// DNS Request Handler
@@ -40,10 +58,7 @@ impl Handler {
         debug!("DNS requests are forwarded to [{}].", query);
         // make sure the request is a query and the message type is a query
         if request.op_code() != OpCode::Query || request.message_type() != MessageType::Query {
-            return Ok(RequestResult {
-                lookup: None,
-                code: ResponseCode::Refused,
-            });
+            return Ok(RequestResult::new_with_code(ResponseCode::Refused));
         }
         self.lookup(query).await
     }
@@ -58,14 +73,8 @@ impl Handler {
         let rt = Runtime::new().unwrap();
         resolvers
             .into_iter()
-            .map(|name| {
-                (
-                    config.resolvers.get(&name).cloned().unwrap(),
-                    name,
-                    query.name().clone(),
-                )
-            })
-            .for_each(|(rs, name, qname)| {
+            .map(|name| (config.resolvers.get(&name).cloned().unwrap(), name))
+            .for_each(|(rs, name)| {
                 let tx1 = tx.clone();
                 let domain = query.name().to_string();
                 let query_type = query.query_type();
@@ -78,25 +87,7 @@ impl Handler {
                             Err(ResolveErrorKind::Proto(ProtoErrorKind::Timeout.into()).into())
                         }
                     };
-                    match lookup {
-                        Ok(lookup) => {
-                            let _ = tx1.try_send(Some((lookup, name, domain)));
-                        }
-                        Err(e) => {
-                            match e.into_soa() {
-                                Some(soa) => {
-                                    let lookup = Lookup::new_with_max_ttl(
-                                        Query::query(qname.into(), query_type),
-                                        Arc::from([soa.clone().into_record_of_rdata()]),
-                                    );
-                                    let _ = tx1.try_send(Some((lookup, name, domain)));
-                                }
-                                None => {
-                                    let _ = tx1.try_send(None);
-                                }
-                            };
-                        }
-                    }
+                    let _ = tx1.try_send(Some((lookup, name, domain)));
                 });
             });
         let mut lookup_result = None;
@@ -104,14 +95,29 @@ impl Handler {
             let lookup = rx.recv().unwrap();
             match lookup {
                 Some((lookup, name, domain)) => {
-                    match filter::check_response(config, &domain, &name, &lookup) {
-                        RuleAction::Accept => {
-                            debug!("Use result from {}", name);
-                            lookup_result = Some(lookup);
-                            break;
-                        }
-                        RuleAction::Drop => (),
-                    }
+                    match lookup {
+                        Ok(lookup) => match filter::check_response(config, &domain, &name, &lookup)
+                        {
+                            RuleAction::Accept => {
+                                debug!("Use result from {}", name);
+                                let mut result =
+                                    RequestResult::new_with_code(ResponseCode::NoError);
+                                result.set_answers(lookup.records().iter().cloned().collect());
+                                lookup_result = Some(result);
+                                break;
+                            }
+                            RuleAction::Drop => (),
+                        },
+                        Err(e) => match e.into_soa() {
+                            Some(soa) => {
+                                let mut result =
+                                    RequestResult::new_with_code(ResponseCode::NXDomain);
+                                result.set_soa(vec![soa.clone().into_record_of_rdata()]);
+                                lookup_result = Some(result);
+                            }
+                            None => (),
+                        },
+                    };
                 }
                 None => {}
             }
@@ -119,14 +125,8 @@ impl Handler {
         rt.shutdown_background();
         drop(tx);
         match lookup_result {
-            Some(lookup) => Ok(RequestResult {
-                lookup: Some(lookup),
-                code: ResponseCode::NoError,
-            }),
-            None => Ok(RequestResult {
-                lookup: None,
-                code: ResponseCode::NXDomain,
-            }),
+            Some(lookup) => Ok(lookup),
+            None => Ok(RequestResult::new_with_code(ResponseCode::NXDomain)),
         }
     }
 }
@@ -139,59 +139,24 @@ impl RequestHandler for Handler {
         mut response: R,
     ) -> ResponseInfo {
         // try to handle request
-        let (result, qtype) = if request.queries().len() > 0 {
-            (
-                match self.do_handle_request(request).await {
-                    Ok(info) => info,
-                    Err(e) => {
-                        debug!("Error in RequestHandler:{:#?}", e);
-                        RequestResult {
-                            lookup: None,
-                            code: ResponseCode::ServFail,
-                        }
-                    }
-                },
-                request.queries()[0].query_type(),
-            )
+        let result = if request.queries().len() > 0 {
+            match self.do_handle_request(request).await {
+                Ok(info) => info,
+                Err(e) => {
+                    debug!("Error in RequestHandler:{:#?}", e);
+                    RequestResult::new_with_code(ResponseCode::ServFail)
+                }
+            }
         } else {
-            (
-                RequestResult {
-                    lookup: None,
-                    code: ResponseCode::FormErr,
-                },
-                RecordType::ZERO,
-            )
+            RequestResult::new_with_code(ResponseCode::FormErr)
         };
-        let records = result
-            .lookup
-            .map(move |l| l.records().to_owned())
-            .unwrap_or(vec![]);
-        let answers: Vec<Record> = records
-            .clone()
-            .iter()
-            .filter(|r| {
-                qtype == r.record_type() || (!r.record_type().is_ns() && !r.record_type().is_soa())
-            })
-            .map(|r| r.clone())
-            .collect();
-        let name_servers: Vec<Record> = records
-            .clone()
-            .iter()
-            .filter(|r| !qtype.is_ns() && r.record_type().is_ns())
-            .map(|r| r.clone())
-            .collect();
-        let soa: Vec<Record> = records
-            .clone()
-            .iter()
-            .filter(|r| !qtype.is_soa() && r.record_type().is_soa())
-            .map(|r| r.clone())
-            .collect();
+        let answers = result.answers.unwrap_or_default();
+        let name_servers: Vec<Record> = result.name_servers.unwrap_or_default();
+        let soa: Vec<Record> = result.soa.unwrap_or_default();
         let builder = MessageResponseBuilder::from_message_request(request);
         let mut header = Header::response_from_request(request.header());
         header.set_response_code(result.code);
         header.set_recursion_available(true);
-        header.set_answer_count(answers.len().try_into().unwrap_or(0));
-        header.set_name_server_count(name_servers.len().try_into().unwrap_or(0) + soa.len().try_into().unwrap_or(0));
         let message = builder.build(header, answers.iter(), name_servers.iter(), soa.iter(), &[]);
         response.send_response(message).await.unwrap()
     }
