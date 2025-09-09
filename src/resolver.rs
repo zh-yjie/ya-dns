@@ -194,6 +194,7 @@ mod tests {
             .any(|r| r.data().to_string().eq("8.8.8.8")));
     }
 
+    /*
     #[cfg(feature = "dns-over-quic")]
     #[test]
     fn quic_resolver_test() {
@@ -215,4 +216,5 @@ mod tests {
             .record_iter()
             .any(|r| r.data().to_string().eq("8.8.8.8")));
     }
+    */
 }

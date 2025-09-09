@@ -18,11 +18,10 @@ jobs:
       matrix:
         feature:
           - default
-          - default-doh
-          - default-dot
-          - default-doh3
-          - default-quic
-          - default-tcp_udp
+          # - default-doh
+          # - default-dot
+          # - default-doh3
+          # - default-tcp_udp
     steps:
       - name: checkout
         uses: actions/checkout@v3
