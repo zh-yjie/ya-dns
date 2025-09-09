@@ -96,7 +96,7 @@ pub async fn connect_tcp(
     }
 }
 
-pub async fn bind_udp(
+pub fn bind_udp(
     local_addr: SocketAddr,
     _server_addr: SocketAddr,
     proxy: Option<&ProxyConfig>,
@@ -120,29 +120,36 @@ pub async fn bind_udp(
                 } else {
                     None
                 };
-                let server = proxy.server.clone();
-                let (udp_socket, proxy_stream) = block_on(async move {
-                    let backing_socket = TokioTcpStream::connect(server).await.unwrap();
+                let std_stream = std::net::TcpStream::connect(proxy.server.clone())?;
+                std_stream.set_nonblocking(true)?;
+                let backing_socket = TokioTcpStream::from_std(std_stream)?;
+                let client_src = TargetAddr::Ip("[::]:0".parse().unwrap());
+                let udp_socket = bind_addr_udp(local_addr)?;
+                let proxy_stream = block_on(async {
                     let mut proxy_stream =
                         Socks5Stream::use_stream(backing_socket, auth, Config::default())
                             .await
                             .unwrap();
-                    let client_src = TargetAddr::Ip("[::]:0".parse().unwrap());
                     let proxy_addr = proxy_stream
                         .request(Socks5Command::UDPAssociate, client_src)
                         .await
                         .unwrap();
                     let proxy_addr_resolved = proxy_addr.to_socket_addrs().unwrap().next().unwrap();
-                    let udp_socket = UdpSocket::bind(local_addr).await.unwrap();
                     let _ = udp_socket.connect(proxy_addr_resolved).await;
-                    (udp_socket, proxy_stream)
+                    proxy_stream
                 });
                 Ok(Socks5UdpSocket::Proxy(udp_socket, proxy_stream))
             }
-            _ => Ok(Socks5UdpSocket::Tokio(UdpSocket::bind(local_addr).await?)),
+            _ => Ok(Socks5UdpSocket::Tokio(bind_addr_udp(local_addr)?)),
         },
-        None => Ok(Socks5UdpSocket::Tokio(UdpSocket::bind(local_addr).await?)),
+        None => Ok(Socks5UdpSocket::Tokio(bind_addr_udp(local_addr)?)),
     }
+}
+
+fn bind_addr_udp(addr: SocketAddr) -> io::Result<UdpSocket> {
+    let std_sock = std::net::UdpSocket::bind(addr)?;
+    std_sock.set_nonblocking(true)?;
+    UdpSocket::from_std(std_sock)
 }
 
 fn from_http_err(err: async_http_proxy::HttpError) -> io::Error {

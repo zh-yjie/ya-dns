@@ -23,7 +23,8 @@ pub enum ConfigError {
     #[cfg(any(
         feature = "dns-over-tls",
         feature = "dns-over-https",
-        feature = "dns-over-h3"
+        feature = "dns-over-h3",
+        feature = "dns-over-quic"
     ))]
     #[error("tls-host is missing")]
     NoTlsHost,
@@ -80,6 +81,12 @@ pub enum Upstream {
     },
     #[cfg(feature = "dns-over-h3")]
     H3Upstream {
+        address: Vec<SocketAddr>,
+        tls_host: String,
+        proxy: Option<String>,
+    },
+    #[cfg(feature = "dns-over-quic")]
+    QuicUpstream {
         address: Vec<SocketAddr>,
         tls_host: String,
         proxy: Option<String>,
@@ -216,7 +223,8 @@ pub struct UpstreamConfig {
     #[cfg(any(
         feature = "dns-over-tls",
         feature = "dns-over-https",
-        feature = "dns-over-h3"
+        feature = "dns-over-h3",
+        feature = "dns-over-quic"
     ))]
     #[serde(rename = "tls-host")]
     tls_host: Option<String>,
@@ -278,6 +286,15 @@ impl UpstreamConfig {
                     proxy,
                 })
             }
+            #[cfg(feature = "dns-over-quic")]
+            NetworkType::Quic => {
+                let tls_host = self.tls_host.ok_or(ConfigError::NoTlsHost)?;
+                Ok(Upstream::QuicUpstream {
+                    address,
+                    tls_host,
+                    proxy,
+                })
+            }
         }
     }
 }
@@ -297,6 +314,9 @@ enum NetworkType {
     #[cfg(feature = "dns-over-h3")]
     #[serde(rename = "h3")]
     H3,
+    #[cfg(feature = "dns-over-quic")]
+    #[serde(rename = "quic")]
+    Quic,
 }
 
 impl NetworkType {
@@ -309,6 +329,8 @@ impl NetworkType {
             NetworkType::Https => 443,
             #[cfg(feature = "dns-over-h3")]
             NetworkType::H3 => 443,
+            #[cfg(feature = "dns-over-quic")]
+            NetworkType::Quic => 853,
         }
     }
 }

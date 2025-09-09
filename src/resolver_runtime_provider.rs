@@ -1,23 +1,19 @@
 use futures::Future;
-#[cfg(feature = "dns-over-h3")]
+#[cfg(any(feature = "dns-over-h3", feature = "dns-over-quic"))]
 use hickory_proto::runtime::QuicSocketBinder;
 use hickory_proto::runtime::{
     iocompat::AsyncIoTokioAsStd, RuntimeProvider, TokioHandle, TokioTime,
 };
 use hickory_resolver::name_server::GenericConnector;
-#[cfg(feature = "dns-over-h3")]
-use quinn::Runtime;
 use std::io;
 use std::net::SocketAddr;
 use std::pin::Pin;
-#[cfg(feature = "dns-over-h3")]
-use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpSocket;
 use tokio::time::timeout;
 
 use crate::resolver_proxy;
-use crate::resolver_proxy::ProxyConfig;
+use crate::resolver_proxy::{ProxyConfig, Socks5UdpSocket};
 
 /// The Tokio Runtime for async execution
 #[derive(Clone)]
@@ -29,7 +25,7 @@ pub struct ProxyRuntimeProvider {
 impl ProxyRuntimeProvider {
     pub fn new(proxy: Option<ProxyConfig>) -> Self {
         Self {
-            proxy,
+            proxy: proxy.clone(),
             handle: TokioHandle::default(),
         }
     }
@@ -38,7 +34,7 @@ impl ProxyRuntimeProvider {
 impl RuntimeProvider for ProxyRuntimeProvider {
     type Handle = TokioHandle;
     type Timer = TokioTime;
-    type Udp = resolver_proxy::Socks5UdpSocket;
+    type Udp = Socks5UdpSocket;
     type Tcp = AsyncIoTokioAsStd<resolver_proxy::TcpStream>;
 
     fn create_handle(&self) -> Self::Handle {
@@ -81,29 +77,35 @@ impl RuntimeProvider for ProxyRuntimeProvider {
         server_addr: SocketAddr,
     ) -> Pin<Box<dyn Send + Future<Output = io::Result<Self::Udp>>>> {
         let proxy_config = self.proxy.clone();
-        Box::pin(async move {
-            resolver_proxy::bind_udp(local_addr, server_addr, proxy_config.as_ref()).await
-        })
+        Box::pin(
+            async move { resolver_proxy::bind_udp(local_addr, server_addr, proxy_config.as_ref()) },
+        )
     }
 
-    #[cfg(feature = "dns-over-h3")]
+    #[cfg(any(feature = "dns-over-h3", feature = "dns-over-quic"))]
     fn quic_binder(&self) -> Option<&dyn QuicSocketBinder> {
-        Some(&TokioQuicSocketBinder)
+        Some(self)
     }
 }
 
-#[cfg(feature = "dns-over-h3")]
-struct TokioQuicSocketBinder;
-
-#[cfg(feature = "dns-over-h3")]
-impl QuicSocketBinder for TokioQuicSocketBinder {
+#[cfg(any(feature = "dns-over-h3", feature = "dns-over-quic"))]
+impl QuicSocketBinder for ProxyRuntimeProvider {
     fn bind_quic(
         &self,
         local_addr: SocketAddr,
-        _server_addr: SocketAddr,
-    ) -> Result<Arc<dyn quinn::AsyncUdpSocket>, io::Error> {
-        let socket = std::net::UdpSocket::bind(local_addr)?;
-        quinn::TokioRuntime.wrap_udp_socket(socket)
+        server_addr: SocketAddr,
+    ) -> Result<std::sync::Arc<dyn quinn::AsyncUdpSocket>, io::Error> {
+        use quinn::{Runtime, TokioRuntime};
+
+        let socket = resolver_proxy::bind_udp(local_addr, server_addr, self.proxy.as_ref());
+        let socket = match socket {
+            Ok(socket) => match socket {
+                Socks5UdpSocket::Tokio(udp_socket) => udp_socket.into_std(),
+                Socks5UdpSocket::Proxy(udp_socket, _) => udp_socket.into_std(),
+            },
+            Err(_) => std::net::UdpSocket::bind(local_addr),
+        };
+        TokioRuntime.wrap_udp_socket(socket?)
     }
 }
 

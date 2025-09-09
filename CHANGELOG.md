@@ -1,5 +1,6 @@
 # 0.7.0
 
+- add dns over quic support
 - update hickory-dns to 0.25
 
 # 0.6.0

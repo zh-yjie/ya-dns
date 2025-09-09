@@ -21,6 +21,7 @@ jobs:
           - default-doh
           - default-dot
           - default-doh3
+          - default-quic
           - default-tcp_udp
     steps:
       - name: checkout

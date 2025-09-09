@@ -62,6 +62,12 @@ impl From<(&Upstream, &ResolverOpts)> for RecursiveResolver {
                 tls_host,
                 proxy,
             } => (Protocol::H3, address, Some(tls_host.to_owned()), proxy),
+            #[cfg(feature = "dns-over-quic")]
+            Upstream::QuicUpstream {
+                address,
+                tls_host,
+                proxy,
+            } => (Protocol::Quic, address, Some(tls_host.to_owned()), proxy),
         };
         let mut resolver_config = ResolverConfig::new();
         address.iter().for_each(|addr| {
@@ -174,6 +180,28 @@ mod tests {
         let io_loop = Runtime::new().unwrap();
         let resolver: RecursiveResolver = (
             &Upstream::H3Upstream {
+                address: vec![dns_addr],
+                proxy: None,
+                tls_host: dns_host,
+            },
+            &ResolverOpts::default(),
+        )
+            .into();
+        let lookup_future = resolver.resolve("dns.google", RecordType::A);
+        let response = io_loop.block_on(lookup_future).unwrap();
+        assert!(response
+            .record_iter()
+            .any(|r| r.data().to_string().eq("8.8.8.8")));
+    }
+
+    #[cfg(feature = "dns-over-quic")]
+    #[test]
+    fn quic_resolver_test() {
+        let dns_addr = "8.8.8.8:853".parse::<SocketAddr>().unwrap();
+        let dns_host = String::from("dns.google");
+        let io_loop = Runtime::new().unwrap();
+        let resolver: RecursiveResolver = (
+            &Upstream::QuicUpstream {
                 address: vec![dns_addr],
                 proxy: None,
                 tls_host: dns_host,

@@ -5,24 +5,29 @@ name = "yadns"
 version = "0.7.0"
 
 [features]
-default = ["default-doh", "default-doh3", "logging"]
+default = ["default-doh", "default-doh3", "default-quic", "logging"]
 
-default-doh = [
-  "default-dot",
-  "dns-over-https"
-]
 default-dot = [
   "dns-over-tls"
 ]
+default-doh = [
+  "dns-over-tls",
+  "dns-over-https"
+]
 default-doh3 = [
-  "default-dot",
+  "dns-over-tls",
   "dns-over-h3"
+]
+default-quic = [
+  "dns-over-tls",
+  "dns-over-quic"
 ]
 default-tcp_udp = []
 
-dns-over-https = ["hickory-resolver/https-ring"]
 dns-over-tls = ["hickory-resolver/tls-ring", "hickory-resolver/webpki-roots", "hickory-resolver/rustls-platform-verifier"]
+dns-over-https = ["hickory-resolver/https-ring"]
 dns-over-h3 = ["dep:quinn", "hickory-resolver/h3-ring"]
+dns-over-quic = ["dep:quinn", "hickory-resolver/quic-ring"]
 logging = ["dep:env_logger"]
 
 [dependencies]

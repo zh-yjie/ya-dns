@@ -16,6 +16,7 @@ Prebuilt releases are available [here](https://github.com/zh-yjie/ya-dns/release
 * DNS over TLS (DoT)
 * DNS over HTTPS (DoH)
 * DNS over HTTP/3 (DoH3)
+* DNS over QUIC (DoQ)
 * Rule based forwarding
 * Rule based response filtering
 * Parallel forwarding
