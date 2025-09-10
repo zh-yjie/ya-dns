@@ -1,5 +1,4 @@
 use crate::{config::RuleAction, filter, handler_config::HandlerConfig};
-use crossbeam_channel::bounded;
 use hickory_proto::{op::LowerQuery, rr::Record, ProtoErrorKind};
 use hickory_resolver::{ResolveError, ResolveErrorKind};
 use hickory_server::{
@@ -9,7 +8,7 @@ use hickory_server::{
 };
 use log::debug;
 use std::time::Duration;
-use tokio::{runtime::Runtime, time::timeout};
+use tokio::time::timeout;
 
 #[derive(Clone, Debug)]
 struct RequestResult {
@@ -68,31 +67,28 @@ impl Handler {
         //self.counter.fetch_add(1, Ordering::SeqCst);
         let config = &self.config;
         let resolvers = filter::resolvers(config, query);
-        let resolvers_len = resolvers.len();
-        let (tx, rx) = bounded(resolvers_len);
-        let rt = Runtime::new().unwrap();
+        let mut join_set = tokio::task::JoinSet::new();
         resolvers
             .into_iter()
             .map(|name| (config.resolvers.get(&name).cloned().unwrap(), name))
             .for_each(|(rs, name)| {
-                let tx1 = tx.clone();
                 let domain = query.name().to_string();
                 let query_type = query.query_type();
-                rt.spawn(async move {
+                join_set.spawn(async move {
                     let res =
-                        timeout(Duration::from_secs(5), rs.resolve(&domain, query_type)).await;
+                        timeout(Duration::from_secs(1), rs.resolve(&domain, query_type)).await;
                     let lookup = match res {
                         Ok(lookup) => lookup,
                         Err(_) => {
                             Err(ResolveErrorKind::Proto(ProtoErrorKind::Timeout.into()).into())
                         }
                     };
-                    let _ = tx1.try_send(Some((lookup, name, domain)));
+                    Some((lookup, name, domain))
                 });
             });
         let mut lookup_result = None;
-        for _ in 0..resolvers_len {
-            let lookup = rx.recv().unwrap();
+        while let Some(res) = join_set.join_next().await {
+            let lookup = res.unwrap();
             match lookup {
                 Some((lookup, name, domain)) => {
                     match lookup {
@@ -122,8 +118,8 @@ impl Handler {
                 None => {}
             }
         }
-        rt.shutdown_background();
-        drop(tx);
+        join_set.abort_all();
+        join_set.detach_all();
         match lookup_result {
             Some(lookup) => Ok(lookup),
             None => Ok(RequestResult::new_with_code(ResponseCode::NXDomain)),

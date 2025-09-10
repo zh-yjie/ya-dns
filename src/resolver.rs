@@ -30,7 +30,7 @@ impl RecursiveResolver {
         record_type: RecordType,
     ) -> Result<Lookup, ResolveError> {
         match record_type {
-            RecordType::A | RecordType::AAAA => match self.resolver.lookup_ip(domain).await {
+            RecordType::A => match self.resolver.lookup_ip(domain).await {
                 Ok(res) => Ok(res.as_lookup().to_owned()),
                 Err(e) => Err(e),
             },
@@ -86,14 +86,11 @@ impl From<(&Upstream, &ResolverOpts)> for RecursiveResolver {
 mod tests {
     use std::net::SocketAddr;
 
-    use tokio::runtime::Runtime;
-
     use super::*;
 
-    #[test]
-    fn udp_resolver_test() {
+    #[tokio::test]
+    async fn udp_resolver_test() {
         let dns_addr = "8.8.8.8:53".parse::<SocketAddr>().unwrap();
-        let io_loop = Runtime::new().unwrap();
         let resolver: RecursiveResolver = (
             &Upstream::UdpUpstream {
                 address: vec![dns_addr],
@@ -102,17 +99,15 @@ mod tests {
             &ResolverOpts::default(),
         )
             .into();
-        let lookup_future = resolver.resolve("dns.google", RecordType::A);
-        let response = io_loop.block_on(lookup_future).unwrap();
+        let response = resolver.resolve("dns.google", RecordType::A).await.unwrap();
         assert!(response
             .record_iter()
             .any(|r| r.data().to_string().eq("8.8.8.8")));
     }
 
-    #[test]
-    fn tcp_resolver_test() {
+    #[tokio::test]
+    async fn tcp_resolver_test() {
         let dns_addr = "8.8.8.8:53".parse::<SocketAddr>().unwrap();
-        let io_loop = Runtime::new().unwrap();
         let resolver: RecursiveResolver = (
             &Upstream::TcpUpstream {
                 address: vec![dns_addr],
@@ -121,19 +116,17 @@ mod tests {
             &ResolverOpts::default(),
         )
             .into();
-        let lookup_future = resolver.resolve("dns.google", RecordType::A);
-        let response = io_loop.block_on(lookup_future).unwrap();
+        let response = resolver.resolve("dns.google", RecordType::A).await.unwrap();
         assert!(response
             .record_iter()
             .any(|r| r.data().to_string().eq("8.8.8.8")));
     }
 
     #[cfg(feature = "dns-over-tls")]
-    #[test]
-    fn tls_resolver_test() {
+    #[tokio::test]
+    async fn tls_resolver_test() {
         let dns_addr = "8.8.8.8:853".parse::<SocketAddr>().unwrap();
         let dns_host = String::from("dns.google");
-        let io_loop = Runtime::new().unwrap();
         let resolver: RecursiveResolver = (
             &Upstream::TlsUpstream {
                 address: vec![dns_addr],
@@ -143,19 +136,17 @@ mod tests {
             &ResolverOpts::default(),
         )
             .into();
-        let lookup_future = resolver.resolve("dns.google", RecordType::A);
-        let response = io_loop.block_on(lookup_future).unwrap();
+        let response = resolver.resolve("dns.google", RecordType::A).await.unwrap();
         assert!(response
             .record_iter()
             .any(|r| r.data().to_string().eq("8.8.8.8")));
     }
 
     #[cfg(feature = "dns-over-https")]
-    #[test]
-    fn https_resolver_test() {
+    #[tokio::test]
+    async fn https_resolver_test() {
         let dns_addr = "8.8.8.8:443".parse::<SocketAddr>().unwrap();
         let dns_host = String::from("dns.google");
-        let io_loop = Runtime::new().unwrap();
         let resolver: RecursiveResolver = (
             &Upstream::HttpsUpstream {
                 address: vec![dns_addr],
@@ -165,19 +156,17 @@ mod tests {
             &ResolverOpts::default(),
         )
             .into();
-        let lookup_future = resolver.resolve("dns.google", RecordType::A);
-        let response = io_loop.block_on(lookup_future).unwrap();
+        let response = resolver.resolve("dns.google", RecordType::A).await.unwrap();
         assert!(response
             .record_iter()
             .any(|r| r.data().to_string().eq("8.8.8.8")));
     }
 
     #[cfg(feature = "dns-over-h3")]
-    #[test]
-    fn h3_resolver_test() {
+    #[tokio::test]
+    async fn h3_resolver_test() {
         let dns_addr = "8.8.8.8:443".parse::<SocketAddr>().unwrap();
         let dns_host = String::from("dns.google");
-        let io_loop = Runtime::new().unwrap();
         let resolver: RecursiveResolver = (
             &Upstream::H3Upstream {
                 address: vec![dns_addr],
@@ -187,34 +176,9 @@ mod tests {
             &ResolverOpts::default(),
         )
             .into();
-        let lookup_future = resolver.resolve("dns.google", RecordType::A);
-        let response = io_loop.block_on(lookup_future).unwrap();
+        let response = resolver.resolve("dns.google", RecordType::A).await.unwrap();
         assert!(response
             .record_iter()
             .any(|r| r.data().to_string().eq("8.8.8.8")));
     }
-
-    /*
-    #[cfg(feature = "dns-over-quic")]
-    #[test]
-    fn quic_resolver_test() {
-        let dns_addr = "8.8.8.8:853".parse::<SocketAddr>().unwrap();
-        let dns_host = String::from("dns.google");
-        let io_loop = Runtime::new().unwrap();
-        let resolver: RecursiveResolver = (
-            &Upstream::QuicUpstream {
-                address: vec![dns_addr],
-                proxy: None,
-                tls_host: dns_host,
-            },
-            &ResolverOpts::default(),
-        )
-            .into();
-        let lookup_future = resolver.resolve("dns.google", RecordType::A);
-        let response = io_loop.block_on(lookup_future).unwrap();
-        assert!(response
-            .record_iter()
-            .any(|r| r.data().to_string().eq("8.8.8.8")));
-    }
-    */
 }

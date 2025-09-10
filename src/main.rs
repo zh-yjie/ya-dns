@@ -2,6 +2,7 @@ use crate::config::{Config, ConfigBuilder};
 use crate::handler::Handler;
 use clap::Parser;
 use config::ConfigError;
+use hickory_proto::ProtoError;
 use hickory_server::ServerFuture;
 use option::Args;
 use log::{error, info};
@@ -24,7 +25,7 @@ mod resolver_proxy;
 mod resolver_runtime_provider;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), ProtoError> {
     let config = config().unwrap_or_log();
 
     #[cfg(feature = "logging")]
@@ -33,15 +34,15 @@ async fn main() {
     let bind_socket = config.bind;
     let mut server = ServerFuture::new(Handler::new(config.into()));
 
-    let bind = UdpSocket::bind(bind_socket);
+    let bind = UdpSocket::bind(bind_socket).await?;
     info!("Listening on UDP: {}", bind_socket);
-    server.register_socket(bind.await.unwrap());
+    server.register_socket(bind);
 
-    let bind = TcpListener::bind(bind_socket);
+    let bind = TcpListener::bind(bind_socket).await?;
     info!("Listening on TCP: {}", bind_socket);
-    server.register_listener(bind.await.unwrap(), Duration::from_secs(10));
+    server.register_listener(bind, Duration::from_secs(10));
 
-    server.block_until_done().await.unwrap();
+    server.block_until_done().await
 }
 
 #[cfg(feature = "logging")]

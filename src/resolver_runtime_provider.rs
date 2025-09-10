@@ -100,8 +100,9 @@ impl QuicSocketBinder for ProxyRuntimeProvider {
         let socket = resolver_proxy::bind_udp(local_addr, server_addr, self.proxy.as_ref());
         let socket = match socket {
             Ok(socket) => match socket {
-                Socks5UdpSocket::Tokio(udp_socket) => udp_socket.into_std(),
-                Socks5UdpSocket::Proxy(udp_socket, _) => udp_socket.into_std(),
+                Socks5UdpSocket::Tokio(udp_socket) | Socks5UdpSocket::Proxy(udp_socket, _) => {
+                    udp_socket.into_std()
+                }
             },
             Err(_) => std::net::UdpSocket::bind(local_addr),
         };
