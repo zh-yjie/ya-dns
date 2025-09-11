@@ -13,6 +13,7 @@ use hickory_proto::udp::DnsUdpSocket;
 use std::net::ToSocketAddrs;
 use std::task::Context;
 use std::task::Poll;
+use std::time::Duration;
 use std::{
     fmt::{Display, Write},
     io,
@@ -20,14 +21,17 @@ use std::{
     pin::Pin,
     str::FromStr,
 };
+use tokio::net::TcpSocket;
 use tokio::net::TcpStream as TokioTcpStream;
 use tokio::net::UdpSocket;
+use tokio::time::timeout;
 
 use thiserror::Error;
 use url::{ParseError, Url};
 
 pub async fn connect_tcp(
     server_addr: SocketAddr,
+    bind_addr: Option<SocketAddr>,
     proxy: Option<&ProxyConfig>,
 ) -> io::Result<TcpStream> {
     let target_addr = server_addr.ip().to_string();
@@ -90,13 +94,21 @@ pub async fn connect_tcp(
                 Ok(TcpStream::Tokio(tcp))
             }
         },
-        None => TokioTcpStream::connect(server_addr)
-            .await
-            .map(TcpStream::Tokio),
+        None => {
+            let socket = match server_addr {
+                SocketAddr::V4(_) => TcpSocket::new_v4(),
+                SocketAddr::V6(_) => TcpSocket::new_v6(),
+            }?;
+            if let Some(bind_addr) = bind_addr {
+                socket.bind(bind_addr)?;
+            }
+            socket.set_nodelay(true)?;
+            Ok(TcpStream::Tokio(socket.connect(server_addr).await?))
+        }
     }
 }
 
-pub fn bind_udp(
+pub async fn bind_udp(
     local_addr: SocketAddr,
     _server_addr: SocketAddr,
     proxy: Option<&ProxyConfig>,
@@ -120,36 +132,41 @@ pub fn bind_udp(
                 } else {
                     None
                 };
-                let std_stream = std::net::TcpStream::connect(proxy.server.clone())?;
-                std_stream.set_nonblocking(true)?;
-                let backing_socket = TokioTcpStream::from_std(std_stream)?;
-                let client_src = TargetAddr::Ip("[::]:0".parse().unwrap());
-                let udp_socket = bind_addr_udp(local_addr)?;
-                let proxy_stream = block_on(async {
-                    let mut proxy_stream =
-                        Socks5Stream::use_stream(backing_socket, auth, Config::default())
-                            .await
-                            .unwrap();
-                    let proxy_addr = proxy_stream
-                        .request(Socks5Command::UDPAssociate, client_src)
-                        .await
-                        .unwrap();
-                    let proxy_addr_resolved = proxy_addr.to_socket_addrs().unwrap().next().unwrap();
-                    let _ = udp_socket.connect(proxy_addr_resolved).await;
-                    proxy_stream
-                });
-                Ok(Socks5UdpSocket::Proxy(udp_socket, proxy_stream))
+                let future = TokioTcpStream::connect(proxy.server.clone());
+                let wait_for = Duration::from_secs(5);
+                match timeout(wait_for, future).await {
+                    Ok(socket) => match socket {
+                        Ok(backing_socket) => {
+                            let client_src = TargetAddr::Ip("[::]:0".parse().unwrap());
+                            let udp_socket = UdpSocket::bind(local_addr).await?;
+                            let mut proxy_stream =
+                                Socks5Stream::use_stream(backing_socket, auth, Config::default())
+                                    .await
+                                    .unwrap();
+                            let proxy_addr = proxy_stream
+                                .request(Socks5Command::UDPAssociate, client_src)
+                                .await
+                                .unwrap();
+                            let proxy_addr_resolved =
+                                proxy_addr.to_socket_addrs().unwrap().next().unwrap();
+                            let _ = udp_socket.connect(proxy_addr_resolved).await;
+                            Ok(Socks5UdpSocket::Proxy(udp_socket, proxy_stream))
+                        }
+                        Err(e) => Err(e),
+                    },
+                    Err(_) => Err(io::Error::new(
+                        io::ErrorKind::TimedOut,
+                        format!(
+                            "connection to proxy {0:?} timed out after {wait_for:?}",
+                            proxy.server.clone()
+                        ),
+                    )),
+                }
             }
-            _ => Ok(Socks5UdpSocket::Tokio(bind_addr_udp(local_addr)?)),
+            _ => Ok(Socks5UdpSocket::Tokio(UdpSocket::bind(local_addr).await?)),
         },
-        None => Ok(Socks5UdpSocket::Tokio(bind_addr_udp(local_addr)?)),
+        None => Ok(Socks5UdpSocket::Tokio(UdpSocket::bind(local_addr).await?)),
     }
-}
-
-fn bind_addr_udp(addr: SocketAddr) -> io::Result<UdpSocket> {
-    let std_sock = std::net::UdpSocket::bind(addr)?;
-    std_sock.set_nonblocking(true)?;
-    UdpSocket::from_std(std_sock)
 }
 
 fn from_http_err(err: async_http_proxy::HttpError) -> io::Error {

@@ -30,7 +30,7 @@ impl RecursiveResolver {
         record_type: RecordType,
     ) -> Result<Lookup, ResolveError> {
         match record_type {
-            RecordType::A => match self.resolver.lookup_ip(domain).await {
+            RecordType::A | RecordType::AAAA => match self.resolver.lookup_ip(domain).await {
                 Ok(res) => Ok(res.as_lookup().to_owned()),
                 Err(e) => Err(e),
             },

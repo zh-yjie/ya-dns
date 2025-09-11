@@ -2,7 +2,7 @@
 authors = ["zyj"]
 edition = "2021"
 name = "yadns"
-version = "0.7.1"
+version = "0.7.2"
 
 [features]
 default = ["default-doh", "default-doh3", "default-quic", "logging"]

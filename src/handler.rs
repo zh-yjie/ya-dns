@@ -1,14 +1,12 @@
 use crate::{config::RuleAction, filter, handler_config::HandlerConfig};
-use hickory_proto::{op::LowerQuery, rr::Record, ProtoErrorKind};
-use hickory_resolver::{ResolveError, ResolveErrorKind};
+use hickory_proto::{op::LowerQuery, rr::Record};
+use hickory_resolver::ResolveError;
 use hickory_server::{
     authority::MessageResponseBuilder,
     proto::op::{Header, MessageType, OpCode, ResponseCode},
     server::{Request, RequestHandler, ResponseHandler, ResponseInfo},
 };
 use log::debug;
-use std::time::Duration;
-use tokio::time::timeout;
 
 #[derive(Clone, Debug)]
 struct RequestResult {
@@ -75,14 +73,7 @@ impl Handler {
                 let domain = query.name().to_string();
                 let query_type = query.query_type();
                 join_set.spawn(async move {
-                    let res =
-                        timeout(Duration::from_secs(1), rs.resolve(&domain, query_type)).await;
-                    let lookup = match res {
-                        Ok(lookup) => lookup,
-                        Err(_) => {
-                            Err(ResolveErrorKind::Proto(ProtoErrorKind::Timeout.into()).into())
-                        }
-                    };
+                    let lookup = rs.resolve(&domain, query_type).await;
                     Some((lookup, name, domain))
                 });
             });

@@ -9,7 +9,6 @@ use std::io;
 use std::net::SocketAddr;
 use std::pin::Pin;
 use std::time::Duration;
-use tokio::net::TcpSocket;
 use tokio::time::timeout;
 
 use crate::resolver_proxy;
@@ -49,16 +48,7 @@ impl RuntimeProvider for ProxyRuntimeProvider {
     ) -> Pin<Box<dyn Send + Future<Output = io::Result<Self::Tcp>>>> {
         let proxy_config = self.proxy.clone();
         Box::pin(async move {
-            let socket = match server_addr {
-                SocketAddr::V4(_) => TcpSocket::new_v4(),
-                SocketAddr::V6(_) => TcpSocket::new_v6(),
-            }?;
-
-            if let Some(bind_addr) = bind_addr {
-                socket.bind(bind_addr)?;
-            }
-            socket.set_nodelay(true)?;
-            let future = resolver_proxy::connect_tcp(server_addr, proxy_config.as_ref());
+            let future = resolver_proxy::connect_tcp(server_addr, bind_addr, proxy_config.as_ref());
             let wait_for = wait_for.unwrap_or(Duration::from_secs(5));
             match timeout(wait_for, future).await {
                 Ok(Ok(socket)) => Ok(AsyncIoTokioAsStd(socket)),
@@ -77,9 +67,9 @@ impl RuntimeProvider for ProxyRuntimeProvider {
         server_addr: SocketAddr,
     ) -> Pin<Box<dyn Send + Future<Output = io::Result<Self::Udp>>>> {
         let proxy_config = self.proxy.clone();
-        Box::pin(
-            async move { resolver_proxy::bind_udp(local_addr, server_addr, proxy_config.as_ref()) },
-        )
+        Box::pin(async move {
+            resolver_proxy::bind_udp(local_addr, server_addr, proxy_config.as_ref()).await
+        })
     }
 
     #[cfg(any(feature = "dns-over-h3", feature = "dns-over-quic"))]
@@ -97,7 +87,9 @@ impl QuicSocketBinder for ProxyRuntimeProvider {
     ) -> Result<std::sync::Arc<dyn quinn::AsyncUdpSocket>, io::Error> {
         use quinn::{Runtime, TokioRuntime};
 
-        let socket = resolver_proxy::bind_udp(local_addr, server_addr, self.proxy.as_ref());
+        let socket = futures::executor::block_on(async {
+            resolver_proxy::bind_udp(local_addr, server_addr, self.proxy.as_ref()).await
+        });
         let socket = match socket {
             Ok(socket) => match socket {
                 Socks5UdpSocket::Tokio(udp_socket) | Socks5UdpSocket::Proxy(udp_socket, _) => {
