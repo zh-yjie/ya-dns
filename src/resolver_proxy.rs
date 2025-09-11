@@ -2,14 +2,16 @@ use async_trait::async_trait;
 use fast_socks5::client::Config;
 use fast_socks5::client::Socks5Stream;
 use fast_socks5::new_udp_header;
-use fast_socks5::parse_udp_request;
 use fast_socks5::util::target_addr::TargetAddr;
 use fast_socks5::AuthenticationMethod;
 use fast_socks5::Socks5Command;
-use futures::executor::block_on;
 use futures::ready;
 use hickory_proto::runtime::TokioTime;
 use hickory_proto::udp::DnsUdpSocket;
+use std::net::Ipv4Addr;
+use std::net::Ipv6Addr;
+use std::net::SocketAddrV4;
+use std::net::SocketAddrV6;
 use std::net::ToSocketAddrs;
 use std::task::Context;
 use std::task::Poll;
@@ -147,9 +149,8 @@ pub async fn bind_udp(
                                 .request(Socks5Command::UDPAssociate, client_src)
                                 .await
                                 .unwrap();
-                            let proxy_addr_resolved =
-                                proxy_addr.to_socket_addrs().unwrap().next().unwrap();
-                            let _ = udp_socket.connect(proxy_addr_resolved).await;
+                            let proxy_addr_resolved = proxy_addr.to_socket_addrs()?.next().unwrap();
+                            udp_socket.connect(proxy_addr_resolved).await?;
                             Ok(Socks5UdpSocket::Proxy(udp_socket, proxy_stream))
                         }
                         Err(e) => Err(e),
@@ -338,15 +339,12 @@ impl DnsUdpSocket for Socks5UdpSocket {
                 Poll::Ready(Ok((len, addr)))
             }
             Socks5UdpSocket::Proxy(udp_socket, _) => {
-                let mut _buf = [0u8; 0x10000];
-                let mut r_buf = tokio::io::ReadBuf::new(&mut _buf);
+                let mut t_buf = [0u8; 0x10000];
+                let mut r_buf = tokio::io::ReadBuf::new(&mut t_buf);
                 ready!(udp_socket.poll_recv_from(cx, &mut r_buf))?;
                 let size = r_buf.filled().len();
-                let (_frag, target_addr, data) =
-                    block_on(parse_udp_request(&mut _buf[..size])).unwrap();
-                buf[..data.len()].copy_from_slice(data);
-                let len = data.len();
-                let addr = target_addr.to_socket_addrs().unwrap().next().unwrap();
+                let (addr, data, len) = parse_socks5_udp(&mut t_buf[..size]);
+                buf[..len].copy_from_slice(data);
                 Poll::Ready(Ok((len, addr)))
             }
         }
@@ -369,4 +367,55 @@ impl DnsUdpSocket for Socks5UdpSocket {
             }
         }
     }
+}
+
+fn parse_socks5_udp<'a>(req: &'a [u8]) -> (SocketAddr, &'a [u8], usize) {
+    let size = req.len();
+    let mut position = 4;
+    let atyp = read::<1>(&req[3..size])[0];
+    let addr = match atyp {
+        fast_socks5::consts::SOCKS5_ADDR_TYPE_IPV4 => {
+            let [a, b, c, d] = read::<4>(&req[4..size]);
+            let port = read::<2>(&req[8..size]);
+            let port = (port[0] as u16) << 8 | port[1] as u16;
+            position += 6;
+            Some(SocketAddr::V4(SocketAddrV4::new(
+                Ipv4Addr::new(a, b, c, d),
+                port.into(),
+            )))
+        }
+        fast_socks5::consts::SOCKS5_ADDR_TYPE_IPV6 => {
+            let x = read::<16>(&req[4..size]);
+            let port = read::<2>(&req[20..size]);
+            let port = (port[0] as u16) << 8 | port[1] as u16;
+            position += 18;
+            Some(SocketAddr::V6(SocketAddrV6::new(
+                Ipv6Addr::from(x),
+                port.into(),
+                0,
+                0,
+            )))
+        }
+        fast_socks5::consts::SOCKS5_ADDR_TYPE_DOMAIN_NAME => {
+            let len = usize::from(read::<1>(&req[4..size])[0]);
+            let mut domain = vec![];
+            domain.copy_from_slice(&req[5..len]);
+            let domain = String::from_utf8(domain).unwrap();
+            let port = read::<2>(&req[(5 + len)..size]);
+            let port = (port[0] as u16) << 8 | port[1] as u16;
+            let target_addr = TargetAddr::Domain(domain, port);
+            position += 3 + len;
+            Some(target_addr.to_socket_addrs().unwrap().next().unwrap())
+        }
+        _ => Some(SocketAddr::from(([0, 0, 0, 0], 0))),
+    };
+    let len = size - position;
+    let data = &req[position..size];
+    (addr.unwrap(), data, len)
+}
+
+fn read<const N: usize>(buf: &[u8]) -> [u8; N] {
+    let mut result = [0u8; N];
+    result.copy_from_slice(&buf[..N]);
+    result
 }
