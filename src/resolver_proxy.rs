@@ -1,8 +1,8 @@
 use async_trait::async_trait;
-use fast_socks5::client::Config;
 use fast_socks5::client::Socks5Stream;
 use fast_socks5::new_udp_header;
 use fast_socks5::util::target_addr::TargetAddr;
+use fast_socks5::util::target_addr::ToTargetAddr;
 use fast_socks5::AuthenticationMethod;
 use fast_socks5::Socks5Command;
 use futures::ready;
@@ -15,7 +15,6 @@ use std::net::SocketAddrV6;
 use std::net::ToSocketAddrs;
 use std::task::Context;
 use std::task::Poll;
-use std::time::Duration;
 use std::{
     fmt::{Display, Write},
     io,
@@ -23,12 +22,10 @@ use std::{
     pin::Pin,
     str::FromStr,
 };
+use thiserror::Error;
 use tokio::net::TcpSocket;
 use tokio::net::TcpStream as TokioTcpStream;
 use tokio::net::UdpSocket;
-use tokio::time::timeout;
-
-use thiserror::Error;
 use url::{ParseError, Url};
 
 pub async fn connect_tcp(
@@ -38,47 +35,36 @@ pub async fn connect_tcp(
 ) -> io::Result<TcpStream> {
     let target_addr = server_addr.ip().to_string();
     let target_port = server_addr.port();
-
+    let socket = match server_addr {
+        SocketAddr::V4(_) => TcpSocket::new_v4(),
+        SocketAddr::V6(_) => TcpSocket::new_v6(),
+    }?;
+    if let Some(bind_addr) = bind_addr {
+        socket.bind(bind_addr)?;
+    }
+    socket.set_nodelay(true)?;
     match proxy {
         Some(proxy) => match proxy.proto {
             ProxyProtocol::Socks5 => {
-                let socks5stream = if proxy.username.is_some() {
-                    Socks5Stream::connect_with_password(
-                        proxy.server,
-                        target_addr,
-                        target_port,
-                        proxy
-                            .username
-                            .as_deref()
-                            .map(|s| s.to_owned())
-                            .unwrap_or_default(),
-                        proxy
-                            .password
-                            .as_deref()
-                            .map(|s| s.to_owned())
-                            .unwrap_or_default(),
-                        Default::default(),
-                    )
-                    .await
-                } else {
-                    Socks5Stream::connect(
-                        proxy.server,
-                        target_addr,
-                        target_port,
-                        Default::default(),
-                    )
-                    .await
-                };
-
-                socks5stream
+                let auth = proxy
+                    .username
+                    .clone()
+                    .map(|username| AuthenticationMethod::Password {
+                        username,
+                        password: proxy.password.clone().unwrap_or_default(),
+                    });
+                let socket = TokioTcpStream::connect(proxy.server.clone()).await?;
+                let target_addr = (target_addr.as_str(), target_port).to_target_addr()?;
+                let socks_stream =
+                    connect_socks5_server(Socks5Command::TCPConnect, socket, target_addr, auth)
+                        .await;
+                socks_stream
                     .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
-                    .map(TcpStream::Proxy)
+                    .map(|(socks_stream, _)| TcpStream::Proxy(socks_stream))
             }
             ProxyProtocol::Http => {
                 use async_http_proxy::{http_connect_tokio, http_connect_tokio_with_basic_auth};
-
-                let mut tcp = TokioTcpStream::connect(proxy.server).await?;
-
+                let mut tcp = socket.connect(server_addr).await?;
                 if let Some(user) = proxy.username.as_deref() {
                     http_connect_tokio_with_basic_auth(
                         &mut tcp,
@@ -96,17 +82,7 @@ pub async fn connect_tcp(
                 Ok(TcpStream::Tokio(tcp))
             }
         },
-        None => {
-            let socket = match server_addr {
-                SocketAddr::V4(_) => TcpSocket::new_v4(),
-                SocketAddr::V6(_) => TcpSocket::new_v6(),
-            }?;
-            if let Some(bind_addr) = bind_addr {
-                socket.bind(bind_addr)?;
-            }
-            socket.set_nodelay(true)?;
-            Ok(TcpStream::Tokio(socket.connect(server_addr).await?))
-        }
+        None => Ok(TcpStream::Tokio(socket.connect(server_addr).await?)),
     }
 }
 
@@ -118,51 +94,23 @@ pub async fn bind_udp(
     match proxy {
         Some(proxy) => match proxy.proto {
             ProxyProtocol::Socks5 => {
-                let auth = if proxy.username.is_some() {
-                    Some(AuthenticationMethod::Password {
-                        username: proxy
-                            .username
-                            .as_deref()
-                            .map(|s| s.to_owned())
-                            .unwrap_or_default(),
-                        password: proxy
-                            .password
-                            .as_deref()
-                            .map(|s| s.to_owned())
-                            .unwrap_or_default(),
-                    })
-                } else {
-                    None
-                };
-                let future = TokioTcpStream::connect(proxy.server.clone());
-                let wait_for = Duration::from_secs(5);
-                match timeout(wait_for, future).await {
-                    Ok(socket) => match socket {
-                        Ok(backing_socket) => {
-                            let client_src = TargetAddr::Ip("[::]:0".parse().unwrap());
-                            let udp_socket = UdpSocket::bind(local_addr).await?;
-                            let mut proxy_stream =
-                                Socks5Stream::use_stream(backing_socket, auth, Config::default())
-                                    .await
-                                    .unwrap();
-                            let proxy_addr = proxy_stream
-                                .request(Socks5Command::UDPAssociate, client_src)
-                                .await
-                                .unwrap();
-                            let proxy_addr_resolved = proxy_addr.to_socket_addrs()?.next().unwrap();
-                            udp_socket.connect(proxy_addr_resolved).await?;
-                            Ok(Socks5UdpSocket::Proxy(udp_socket, proxy_stream))
-                        }
-                        Err(e) => Err(e),
-                    },
-                    Err(_) => Err(io::Error::new(
-                        io::ErrorKind::TimedOut,
-                        format!(
-                            "connection to proxy {0:?} timed out after {wait_for:?}",
-                            proxy.server.clone()
-                        ),
-                    )),
-                }
+                let auth = proxy
+                    .username
+                    .clone()
+                    .map(|username| AuthenticationMethod::Password {
+                        username,
+                        password: proxy.password.clone().unwrap_or_default(),
+                    });
+                let client_src = TargetAddr::Ip("[::]:0".parse().unwrap());
+                let udp_socket = UdpSocket::bind(local_addr).await?;
+                let socket = TokioTcpStream::connect(proxy.server.clone()).await?;
+                socket.set_nodelay(true)?;
+                let (proxy_stream, proxy_addr) =
+                    connect_socks5_server(Socks5Command::UDPAssociate, socket, client_src, auth)
+                        .await?;
+                let proxy_addr_resolved = proxy_addr.to_socket_addrs()?.next().unwrap();
+                udp_socket.connect(proxy_addr_resolved).await?;
+                Ok(Socks5UdpSocket::Proxy(udp_socket, proxy_stream))
             }
             _ => Ok(Socks5UdpSocket::Tokio(UdpSocket::bind(local_addr).await?)),
         },
@@ -175,6 +123,20 @@ fn from_http_err(err: async_http_proxy::HttpError) -> io::Error {
         async_http_proxy::HttpError::IoError(io) => io,
         err => io::Error::new(io::ErrorKind::ConnectionRefused, err),
     }
+}
+
+pub async fn connect_socks5_server(
+    cmd: Socks5Command,
+    socket: TokioTcpStream,
+    target_addr: TargetAddr,
+    auth: Option<AuthenticationMethod>,
+) -> io::Result<(Socks5Stream<TokioTcpStream>, TargetAddr)> {
+    let config = Default::default();
+    let mut socks_stream = Socks5Stream::use_stream(socket, auth, config)
+        .await
+        .unwrap();
+    let bind_addr = socks_stream.request(cmd, target_addr).await.unwrap();
+    Ok((socks_stream, bind_addr))
 }
 
 pub enum TcpStream {

@@ -14,6 +14,8 @@ use tokio::time::timeout;
 use crate::resolver_proxy;
 use crate::resolver_proxy::{ProxyConfig, Socks5UdpSocket};
 
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+
 /// The Tokio Runtime for async execution
 #[derive(Clone)]
 pub struct ProxyRuntimeProvider {
@@ -49,7 +51,7 @@ impl RuntimeProvider for ProxyRuntimeProvider {
         let proxy_config = self.proxy.clone();
         Box::pin(async move {
             let future = resolver_proxy::connect_tcp(server_addr, bind_addr, proxy_config.as_ref());
-            let wait_for = wait_for.unwrap_or(Duration::from_secs(5));
+            let wait_for = wait_for.unwrap_or(CONNECT_TIMEOUT);
             match timeout(wait_for, future).await {
                 Ok(Ok(socket)) => Ok(AsyncIoTokioAsStd(socket)),
                 Ok(Err(e)) => Err(e),
@@ -68,7 +70,16 @@ impl RuntimeProvider for ProxyRuntimeProvider {
     ) -> Pin<Box<dyn Send + Future<Output = io::Result<Self::Udp>>>> {
         let proxy_config = self.proxy.clone();
         Box::pin(async move {
-            resolver_proxy::bind_udp(local_addr, server_addr, proxy_config.as_ref()).await
+            let future = resolver_proxy::bind_udp(local_addr, server_addr, proxy_config.as_ref());
+            let wait_for = CONNECT_TIMEOUT;
+            match timeout(wait_for, future).await {
+                Ok(Ok(socket)) => Ok(socket),
+                Ok(Err(e)) => Err(e),
+                Err(_) => Err(io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    format!("bind {local_addr:?} timed out after {wait_for:?}"),
+                )),
+            }
         })
     }
 
@@ -88,7 +99,16 @@ impl QuicSocketBinder for ProxyRuntimeProvider {
         use quinn::{Runtime, TokioRuntime};
 
         let socket = futures::executor::block_on(async {
-            resolver_proxy::bind_udp(local_addr, server_addr, self.proxy.as_ref()).await
+            let future = resolver_proxy::bind_udp(local_addr, server_addr, self.proxy.as_ref());
+            let wait_for = CONNECT_TIMEOUT;
+            match timeout(wait_for, future).await {
+                Ok(Ok(socket)) => Ok(socket),
+                Ok(Err(e)) => Err(e),
+                Err(_) => Err(io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    format!("bind {local_addr:?} timed out after {wait_for:?}"),
+                )),
+            }
         });
         let socket = match socket {
             Ok(socket) => match socket {
