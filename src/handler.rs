@@ -7,6 +7,7 @@ use hickory_server::{
     server::{Request, RequestHandler, ResponseHandler, ResponseInfo},
 };
 use log::debug;
+use tokio::runtime::{Builder, Runtime};
 
 #[derive(Clone, Debug)]
 struct RequestResult {
@@ -38,15 +39,24 @@ impl RequestResult {
 }
 
 /// DNS Request Handler
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Handler {
     //pub counter: Arc<AtomicU64>,
     config: HandlerConfig,
+    rt: Runtime,
 }
 impl Handler {
     /// Create handler from app config.
     pub fn new(cfg: HandlerConfig) -> Self {
-        Handler { config: cfg }
+        Handler {
+            config: cfg.clone(),
+            rt: Builder::new_multi_thread()
+                .thread_name("handler-worker")
+                .worker_threads(cfg.clone().resolvers.len() * 2)
+                .enable_all()
+                .build()
+                .unwrap(),
+        }
     }
 
     /// Handle request, returning ResponseInfo if response was successfully sent, or an error.
@@ -72,10 +82,13 @@ impl Handler {
             .for_each(|(rs, name)| {
                 let domain = query.name().to_string();
                 let query_type = query.query_type();
-                join_set.spawn(async move {
-                    let lookup = rs.resolve(&domain, query_type).await;
-                    Some((lookup, name, domain))
-                });
+                join_set.spawn_on(
+                    async move {
+                        let lookup = rs.resolve(&domain, query_type).await;
+                        Some((lookup, name, domain))
+                    },
+                    self.rt.handle(),
+                );
             });
         let mut lookup_result = None;
         while let Some(res) = join_set.join_next().await {
