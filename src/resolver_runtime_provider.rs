@@ -96,10 +96,8 @@ impl QuicSocketBinder for ProxyRuntimeProvider {
         local_addr: SocketAddr,
         server_addr: SocketAddr,
     ) -> Result<std::sync::Arc<dyn quinn::AsyncUdpSocket>, io::Error> {
-        use quinn::{Runtime, TokioRuntime};
-
         let socket = futures::executor::block_on(async {
-            let future = resolver_proxy::bind_udp(local_addr, server_addr, self.proxy.as_ref());
+            let future = resolver_proxy::quic_binder(local_addr, server_addr, self.proxy.as_ref());
             let wait_for = CONNECT_TIMEOUT;
             match timeout(wait_for, future).await {
                 Ok(Ok(socket)) => Ok(socket),
@@ -109,16 +107,8 @@ impl QuicSocketBinder for ProxyRuntimeProvider {
                     format!("bind {local_addr:?} timed out after {wait_for:?}"),
                 )),
             }
-        });
-        let socket = match socket {
-            Ok(socket) => match socket {
-                Socks5UdpSocket::Tokio(udp_socket) | Socks5UdpSocket::Proxy(udp_socket, _) => {
-                    udp_socket.into_std()
-                }
-            },
-            Err(_) => std::net::UdpSocket::bind(local_addr),
-        };
-        TokioRuntime.wrap_udp_socket(socket?)
+        })?;
+        Ok(std::sync::Arc::new(socket))
     }
 }
 

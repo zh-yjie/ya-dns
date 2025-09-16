@@ -118,6 +118,49 @@ pub async fn bind_udp(
     }
 }
 
+#[cfg(any(feature = "dns-over-h3", feature = "dns-over-quic"))]
+pub async fn quic_binder(
+    local_addr: SocketAddr,
+    _server_addr: SocketAddr,
+    proxy: Option<&ProxyConfig>,
+) -> io::Result<Socks5QuicSocket> {
+    use quinn::{Runtime, TokioRuntime};
+
+    match proxy {
+        Some(proxy) => match proxy.proto {
+            ProxyProtocol::Socks5 => {
+                let auth = proxy
+                    .username
+                    .clone()
+                    .map(|username| AuthenticationMethod::Password {
+                        username,
+                        password: proxy.password.clone().unwrap_or_default(),
+                    });
+                let client_src = TargetAddr::Ip("[::]:0".parse().unwrap());
+                let udp_socket = UdpSocket::bind(local_addr).await?;
+                let socket = TokioTcpStream::connect(proxy.server.clone()).await?;
+                socket.set_nodelay(true)?;
+                let (proxy_stream, proxy_addr) =
+                    connect_socks5_server(Socks5Command::UDPAssociate, socket, client_src, auth)
+                        .await?;
+                let proxy_addr_resolved = proxy_addr.to_socket_addrs()?.next().unwrap();
+                udp_socket.connect(proxy_addr_resolved).await?;
+                Ok(Socks5QuicSocket::proxy(
+                    TokioRuntime.wrap_udp_socket(udp_socket.into_std()?)?,
+                    Some(proxy_stream),
+                    Some(proxy_addr_resolved),
+                ))
+            }
+            _ => Ok(Socks5QuicSocket::direct(
+                TokioRuntime.wrap_udp_socket(std::net::UdpSocket::bind(local_addr)?)?,
+            )),
+        },
+        None => Ok(Socks5QuicSocket::direct(
+            TokioRuntime.wrap_udp_socket(std::net::UdpSocket::bind(local_addr)?)?,
+        )),
+    }
+}
+
 fn from_http_err(err: async_http_proxy::HttpError) -> io::Error {
     match err {
         async_http_proxy::HttpError::IoError(io) => io,
@@ -380,4 +423,89 @@ fn read<const N: usize>(buf: &[u8]) -> [u8; N] {
     let mut result = [0u8; N];
     result.copy_from_slice(&buf[..N]);
     result
+}
+
+#[cfg(any(feature = "dns-over-h3", feature = "dns-over-quic"))]
+#[derive(Debug)]
+pub struct Socks5QuicSocket {
+    quic_socket: std::sync::Arc<dyn quinn::AsyncUdpSocket>,
+    socks5_stream: Option<Socks5Stream<TokioTcpStream>>,
+    proxy_addr: Option<SocketAddr>,
+}
+
+#[cfg(any(feature = "dns-over-h3", feature = "dns-over-quic"))]
+impl Socks5QuicSocket {
+    pub fn direct(quic_socket: std::sync::Arc<dyn quinn::AsyncUdpSocket>) -> Self {
+        Self::proxy(quic_socket, None, None)
+    }
+    pub fn proxy(
+        quic_socket: std::sync::Arc<dyn quinn::AsyncUdpSocket>,
+        socks5_stream: Option<Socks5Stream<TokioTcpStream>>,
+        proxy_addr: Option<SocketAddr>,
+    ) -> Self {
+        Socks5QuicSocket {
+            quic_socket,
+            socks5_stream,
+            proxy_addr,
+        }
+    }
+}
+
+#[cfg(any(feature = "dns-over-h3", feature = "dns-over-quic"))]
+impl quinn::AsyncUdpSocket for Socks5QuicSocket {
+    fn create_io_poller(self: std::sync::Arc<Self>) -> Pin<Box<dyn quinn::UdpPoller>> {
+        self.quic_socket.clone().create_io_poller()
+    }
+
+    fn try_send(&self, transmit: &quinn::udp::Transmit) -> io::Result<()> {
+        let mut destination = transmit.destination;
+        let mut contents = Vec::new();
+        if self.socks5_stream.is_some() {
+            contents = new_udp_header(destination).unwrap();
+            destination = self.proxy_addr.unwrap();
+        }
+        contents.extend_from_slice(transmit.contents);
+        let new_transmit = quinn::udp::Transmit {
+            destination: destination,
+            ecn: transmit.ecn,
+            contents: &contents,
+            segment_size: transmit.segment_size,
+            src_ip: transmit.src_ip,
+        };
+        self.quic_socket.try_send(&new_transmit)
+    }
+
+    fn poll_recv(
+        &self,
+        cx: &mut Context,
+        bufs: &mut [io::IoSliceMut<'_>],
+        meta: &mut [quinn::udp::RecvMeta],
+    ) -> Poll<io::Result<usize>> {
+        let size = ready!(self.quic_socket.poll_recv(cx, bufs, meta))?;
+        if self.socks5_stream.is_some() {
+            for i in 0..size {
+                let buf: &[u8] = bufs[i].as_ref();
+                let (_addr, data, _len) = parse_socks5_udp(&buf);
+                let buffer = data.to_vec();
+                bufs[i] = io::IoSliceMut::new(Box::leak(buffer.into_boxed_slice()));
+            }
+        }
+        Poll::Ready(Ok(size))
+    }
+
+    fn local_addr(&self) -> io::Result<SocketAddr> {
+        self.quic_socket.local_addr()
+    }
+
+    fn max_transmit_segments(&self) -> usize {
+        self.quic_socket.max_transmit_segments()
+    }
+
+    fn max_receive_segments(&self) -> usize {
+        self.quic_socket.max_receive_segments()
+    }
+
+    fn may_fragment(&self) -> bool {
+        self.quic_socket.may_fragment()
+    }
 }
