@@ -7,6 +7,7 @@ use hickory_server::{
     server::{Request, RequestHandler, ResponseHandler, ResponseInfo},
 };
 use log::debug;
+use std::time::Duration;
 use tokio::runtime::{Builder, Runtime};
 
 #[derive(Clone, Debug)]
@@ -49,13 +50,13 @@ impl Handler {
     /// Create handler from app config.
     pub fn new(cfg: HandlerConfig) -> Self {
         Handler {
-            config: cfg.clone(),
             rt: Builder::new_multi_thread()
                 .thread_name("handler-worker")
-                .worker_threads(cfg.clone().resolvers.len() * 2)
+                .worker_threads(cfg.resolvers.len() * 2)
                 .enable_all()
                 .build()
                 .unwrap(),
+            config: cfg,
         }
     }
 
@@ -76,51 +77,55 @@ impl Handler {
         let config = &self.config;
         let resolvers = filter::resolvers(config, query);
         let mut join_set = tokio::task::JoinSet::new();
-        resolvers
-            .into_iter()
-            .map(|name| (config.resolvers.get(&name).cloned().unwrap(), name))
-            .for_each(|(rs, name)| {
+        resolvers.into_iter().for_each(|name| {
+            if let Some(resolver) = config.resolvers.get(&name).cloned() {
                 let domain = query.name().to_string();
                 let query_type = query.query_type();
                 join_set.spawn_on(
-                    async move {
-                        let lookup = rs.resolve(&domain, query_type).await;
-                        Some((lookup, name, domain))
-                    },
+                    tokio::time::timeout(Duration::from_secs(5), async move {
+                        let lookup = resolver.resolve(&domain, query_type).await;
+                        (lookup, name, domain)
+                    }),
                     self.rt.handle(),
                 );
-            });
+            }
+        });
         let mut lookup_result = None;
         while let Some(res) = join_set.join_next().await {
-            let lookup = res.unwrap();
-            match lookup {
-                Some((lookup, name, domain)) => {
-                    match lookup {
-                        Ok(lookup) => match filter::check_response(config, &domain, &name, &lookup)
-                        {
-                            RuleAction::Accept => {
-                                debug!("Use result from {}", name);
-                                let mut result =
-                                    RequestResult::new_with_code(ResponseCode::NoError);
-                                result.set_answers(lookup.records().iter().cloned().collect());
-                                lookup_result = Some(result);
-                                break;
+            match res {
+                Ok(lookup) => match lookup {
+                    Ok((lookup, name, domain)) => {
+                        match lookup {
+                            Ok(lookup) => {
+                                match filter::check_response(config, &domain, &name, &lookup) {
+                                    RuleAction::Accept => {
+                                        debug!("Use result from {}", name);
+                                        let mut result =
+                                            RequestResult::new_with_code(ResponseCode::NoError);
+                                        result.set_answers(
+                                            lookup.records().iter().cloned().collect(),
+                                        );
+                                        lookup_result = Some(result);
+                                        break;
+                                    }
+                                    RuleAction::Drop => (),
+                                }
                             }
-                            RuleAction::Drop => (),
-                        },
-                        Err(e) => match e.into_soa() {
-                            Some(soa) => {
-                                let mut result =
-                                    RequestResult::new_with_code(ResponseCode::NXDomain);
-                                result.set_soa(vec![soa.clone().into_record_of_rdata()]);
-                                lookup_result = Some(result);
-                            }
-                            None => (),
-                        },
-                    };
-                }
-                None => {}
-            }
+                            Err(e) => match e.into_soa() {
+                                Some(soa) => {
+                                    let mut result =
+                                        RequestResult::new_with_code(ResponseCode::NXDomain);
+                                    result.set_soa(vec![soa.clone().into_record_of_rdata()]);
+                                    lookup_result = Some(result);
+                                }
+                                None => (),
+                            },
+                        };
+                    }
+                    _ => {}
+                },
+                _ => {}
+            };
         }
         join_set.abort_all();
         join_set.detach_all();

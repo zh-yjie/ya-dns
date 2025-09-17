@@ -2,7 +2,7 @@
 authors = ["zyj"]
 edition = "2021"
 name = "yadns"
-version = "0.7.2"
+version = "0.7.3"
 
 [features]
 default = ["default-doh", "default-doh3", "default-quic", "logging"]
@@ -29,12 +29,14 @@ dns-over-https = ["hickory-resolver/https-ring"]
 dns-over-h3 = ["dep:quinn", "hickory-resolver/h3-ring"]
 dns-over-quic = ["dep:quinn", "hickory-resolver/quic-ring"]
 logging = ["dep:env_logger"]
+debug = ["dep:console-subscriber", "tokio/full", "tokio/tracing"]
 
 [dependencies]
 async-http-proxy = {version = "1", features = ["runtime-tokio", "basic-auth"]}
 async-recursion = "1"
 async-trait = "0.1"
 clap = {version = "4", features = ["derive"]}
+console-subscriber = {version = "0.4", optional = true}
 env_logger = {version = "0.11", optional = true}
 fast-socks5 = "0.10"
 futures = {version = "0.3", default-features = false, features = ["executor"]}
@@ -44,6 +46,7 @@ hickory-server = "0.25"
 ipnet = "2"
 iprange = "0.6"
 log = "0.4"
+mimalloc = "0.1"
 publicsuffix = "2"
 quinn = {version = "0.11", optional = true}
 regex = "1"

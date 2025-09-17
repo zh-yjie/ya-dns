@@ -2,14 +2,14 @@ use crate::config::{Config, ConfigBuilder};
 use crate::handler::Handler;
 use clap::Parser;
 use config::ConfigError;
-use hickory_proto::ProtoError;
 use hickory_server::ServerFuture;
-use option::Args;
 use log::{error, info};
+use mimalloc::MiMalloc;
+use option::Args;
 use std::fs::File;
-use std::io::prelude::*;
 use std::process::exit;
 use std::time::Duration;
+use std::{io, io::prelude::*};
 use tokio;
 use tokio::net::{TcpListener, UdpSocket};
 
@@ -24,8 +24,17 @@ mod resolver;
 mod resolver_proxy;
 mod resolver_runtime_provider;
 
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
+
 #[tokio::main]
-async fn main() -> Result<(), ProtoError> {
+async fn main() -> io::Result<()> {
+    #[cfg(feature = "debug")]
+    console_subscriber::ConsoleLayer::builder()
+        .retention(Duration::from_secs(60))
+        .server_addr(([0, 0, 0, 0], 5555))
+        .init();
+
     let config = config().unwrap_or_log();
 
     #[cfg(feature = "logging")]
@@ -42,7 +51,7 @@ async fn main() -> Result<(), ProtoError> {
     info!("Listening on TCP: {}", bind_socket);
     server.register_listener(bind, Duration::from_secs(10));
 
-    server.block_until_done().await
+    Ok(server.block_until_done().await?)
 }
 
 #[cfg(feature = "logging")]
