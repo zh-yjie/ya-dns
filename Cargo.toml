@@ -1,6 +1,6 @@
 [package]
 authors = ["zyj"]
-edition = "2021"
+edition = "2024"
 name = "yadns"
 version = "0.7.3"
 
@@ -40,7 +40,7 @@ console-subscriber = {version = "0.4", optional = true}
 env_logger = {version = "0.11", optional = true}
 fast-socks5 = "0.10"
 futures = {version = "0.3", default-features = false, features = ["executor"]}
-hickory-proto = "0.25"
+hickory-proto = {version = "0.25", default-features = false}
 hickory-resolver = {version = "0.25", default-features = false, features = ["tokio"]}
 hickory-server = "0.25"
 ipnet = "2"

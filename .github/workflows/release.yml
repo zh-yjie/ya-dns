@@ -23,15 +23,6 @@ jobs:
       - name: checkout
         uses: actions/checkout@v3
 
-      - name: install rust toolchain
-        uses: hecrj/setup-rust-action@v1
-        with:
-          rust-version: stable
-
-      - name: install deps
-        run: |
-          sudo apt update && sudo apt install llvm-dev libclang-dev clang libssl-dev pkg-config protobuf-compiler make -y
-
       - name: install cross
         run: |
           cargo install cross
@@ -76,15 +67,6 @@ jobs:
     steps:
       - name: checkout
         uses: actions/checkout@v3
-
-      - name: install rust toolchain
-        uses: hecrj/setup-rust-action@v1
-        with:
-          rust-version: nightly
-
-      - name: install llvm
-        run: |
-          brew install llvm protobuf
 
       - name: build
         run: |
