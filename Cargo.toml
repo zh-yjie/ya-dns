@@ -46,7 +46,6 @@ hickory-server = "0.25"
 ipnet = "2"
 iprange = "0.6"
 log = "0.4"
-mimalloc = "0.1"
 publicsuffix = "2"
 quinn = {version = "0.11", optional = true}
 regex = "1"
@@ -56,6 +55,9 @@ thiserror = "2"
 tokio = "1"
 toml = "0.9"
 url = "2"
+
+[target.'cfg(not(target_os = "windows"))'.dependencies]
+mimalloc = "0.1"
 
 [profile.release]
 lto = true
