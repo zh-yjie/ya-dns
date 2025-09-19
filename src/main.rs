@@ -23,10 +23,6 @@ mod resolver;
 mod resolver_proxy;
 mod resolver_runtime_provider;
 
-#[cfg(not(target_os = "windows"))]
-#[global_allocator]
-static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
-
 #[tokio::main]
 async fn main() -> io::Result<()> {
     #[cfg(feature = "debug")]

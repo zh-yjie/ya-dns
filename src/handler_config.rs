@@ -7,7 +7,7 @@ use regex::RegexSet;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct HandlerConfig {
     pub defaults: Arc<Vec<String>>,
     pub resolvers: Arc<HashMap<String, Arc<RecursiveResolver>>>,
@@ -17,7 +17,7 @@ pub struct HandlerConfig {
     pub response_rules: Arc<Vec<ResponseRule>>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Domains {
     pub regex_set: RegexSet,
     pub suffix: DomainSuffix,
@@ -33,7 +33,7 @@ impl From<Config> for HandlerConfig {
         let resolvers: HashMap<_, _> = config
             .upstreams
             .iter()
-            .map(|(name, upstream)| (name.to_owned(), Arc::new((upstream, &opts).into())))
+            .map(|(name, upstream)| (name.to_string(), Arc::new((upstream, &opts).into())))
             .collect();
 
         let domains: HashMap<_, _> = config
@@ -41,7 +41,7 @@ impl From<Config> for HandlerConfig {
             .iter()
             .map(|(name, domains)| {
                 (
-                    name.to_owned(),
+                    name.to_string(),
                     Domains {
                         regex_set: RegexSet::new(&domains.regex_set).unwrap(),
                         suffix: domains.suffix_set.join("\n").parse().unwrap(),

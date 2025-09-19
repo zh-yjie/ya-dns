@@ -7,7 +7,7 @@ use hickory_resolver::{ResolveError, Resolver};
 use crate::config::Upstream;
 use crate::resolver_runtime_provider::{ProxyConnectionProvider, ProxyRuntimeProvider};
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct RecursiveResolver {
     pub resolver: Resolver<ProxyConnectionProvider>,
 }
@@ -31,7 +31,7 @@ impl RecursiveResolver {
     ) -> Result<Lookup, ResolveError> {
         match record_type {
             RecordType::A | RecordType::AAAA => match self.resolver.lookup_ip(domain).await {
-                Ok(res) => Ok(res.as_lookup().to_owned()),
+                Ok(res) => Ok(res.into()),
                 Err(e) => Err(e),
             },
             _ => self.resolver.lookup(domain, record_type).await,
@@ -49,36 +49,36 @@ impl From<(&Upstream, &ResolverOpts)> for RecursiveResolver {
                 address,
                 tls_host,
                 proxy,
-            } => (Protocol::Tls, address, Some(tls_host.to_owned()), proxy),
+            } => (Protocol::Tls, address, Some(tls_host.to_string()), proxy),
             #[cfg(feature = "dns-over-https")]
             Upstream::HttpsUpstream {
                 address,
                 tls_host,
                 proxy,
-            } => (Protocol::Https, address, Some(tls_host.to_owned()), proxy),
+            } => (Protocol::Https, address, Some(tls_host.to_string()), proxy),
             #[cfg(feature = "dns-over-h3")]
             Upstream::H3Upstream {
                 address,
                 tls_host,
                 proxy,
-            } => (Protocol::H3, address, Some(tls_host.to_owned()), proxy),
+            } => (Protocol::H3, address, Some(tls_host.to_string()), proxy),
             #[cfg(feature = "dns-over-quic")]
             Upstream::QuicUpstream {
                 address,
                 tls_host,
                 proxy,
-            } => (Protocol::Quic, address, Some(tls_host.to_owned()), proxy),
+            } => (Protocol::Quic, address, Some(tls_host.to_string()), proxy),
         };
         let mut resolver_config = ResolverConfig::new();
         address.iter().for_each(|addr| {
             let mut name_server_config = NameServerConfig::new(*addr, protocol);
-            name_server_config.tls_dns_name = tls_host.to_owned();
+            name_server_config.tls_dns_name = tls_host.clone();
             resolver_config.add_name_server(name_server_config);
         });
         let runtime_provider =
-            ProxyRuntimeProvider::new(proxy.to_owned().map(|p| p.parse().unwrap()));
+            ProxyRuntimeProvider::new(proxy.as_ref().map(|p| p.parse().unwrap()));
         let provider = ProxyConnectionProvider::new(runtime_provider);
-        RecursiveResolver::new(resolver_config, options.to_owned(), provider)
+        RecursiveResolver::new(resolver_config, options.clone(), provider)
     }
 }
 
@@ -100,9 +100,11 @@ mod tests {
         )
             .into();
         let response = resolver.resolve("dns.google", RecordType::A).await.unwrap();
-        assert!(response
-            .record_iter()
-            .any(|r| r.data().to_string().eq("8.8.8.8")));
+        assert!(
+            response
+                .record_iter()
+                .any(|r| r.data().to_string().eq("8.8.8.8"))
+        );
     }
 
     #[tokio::test]
@@ -117,9 +119,11 @@ mod tests {
         )
             .into();
         let response = resolver.resolve("dns.google", RecordType::A).await.unwrap();
-        assert!(response
-            .record_iter()
-            .any(|r| r.data().to_string().eq("8.8.8.8")));
+        assert!(
+            response
+                .record_iter()
+                .any(|r| r.data().to_string().eq("8.8.8.8"))
+        );
     }
 
     #[cfg(feature = "dns-over-tls")]
@@ -137,9 +141,11 @@ mod tests {
         )
             .into();
         let response = resolver.resolve("dns.google", RecordType::A).await.unwrap();
-        assert!(response
-            .record_iter()
-            .any(|r| r.data().to_string().eq("8.8.8.8")));
+        assert!(
+            response
+                .record_iter()
+                .any(|r| r.data().to_string().eq("8.8.8.8"))
+        );
     }
 
     #[cfg(feature = "dns-over-https")]
@@ -157,9 +163,11 @@ mod tests {
         )
             .into();
         let response = resolver.resolve("dns.google", RecordType::A).await.unwrap();
-        assert!(response
-            .record_iter()
-            .any(|r| r.data().to_string().eq("8.8.8.8")));
+        assert!(
+            response
+                .record_iter()
+                .any(|r| r.data().to_string().eq("8.8.8.8"))
+        );
     }
 
     #[cfg(feature = "dns-over-h3")]
@@ -177,8 +185,10 @@ mod tests {
         )
             .into();
         let response = resolver.resolve("dns.google", RecordType::A).await.unwrap();
-        assert!(response
-            .record_iter()
-            .any(|r| r.data().to_string().eq("8.8.8.8")));
+        assert!(
+            response
+                .record_iter()
+                .any(|r| r.data().to_string().eq("8.8.8.8"))
+        );
     }
 }

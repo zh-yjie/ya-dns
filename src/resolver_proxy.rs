@@ -1,10 +1,10 @@
 use async_trait::async_trait;
+use fast_socks5::AuthenticationMethod;
+use fast_socks5::Socks5Command;
 use fast_socks5::client::Socks5Stream;
 use fast_socks5::new_udp_header;
 use fast_socks5::util::target_addr::TargetAddr;
 use fast_socks5::util::target_addr::ToTargetAddr;
-use fast_socks5::AuthenticationMethod;
-use fast_socks5::Socks5Command;
 use futures::ready;
 use hickory_proto::runtime::TokioTime;
 use hickory_proto::udp::DnsUdpSocket;
@@ -46,14 +46,8 @@ pub async fn connect_tcp(
     match proxy {
         Some(proxy) => match proxy.proto {
             ProxyProtocol::Socks5 => {
-                let auth = proxy
-                    .username
-                    .clone()
-                    .map(|username| AuthenticationMethod::Password {
-                        username,
-                        password: proxy.password.clone().unwrap_or_default(),
-                    });
-                let socket = TokioTcpStream::connect(proxy.server.clone()).await?;
+                let auth: Option<AuthenticationMethod> = Some(proxy.into());
+                let socket = TokioTcpStream::connect(proxy.server).await?;
                 let target_addr = (target_addr.as_str(), target_port).to_target_addr()?;
                 let socks_stream =
                     connect_socks5_server(Socks5Command::TCPConnect, socket, target_addr, auth)
@@ -71,7 +65,7 @@ pub async fn connect_tcp(
                         &target_addr,
                         target_port,
                         user,
-                        proxy.password.as_deref().unwrap_or(""),
+                        proxy.password.as_deref().unwrap_or_default(),
                     )
                     .await
                 } else {
@@ -94,16 +88,10 @@ pub async fn bind_udp(
     match proxy {
         Some(proxy) => match proxy.proto {
             ProxyProtocol::Socks5 => {
-                let auth = proxy
-                    .username
-                    .clone()
-                    .map(|username| AuthenticationMethod::Password {
-                        username,
-                        password: proxy.password.clone().unwrap_or_default(),
-                    });
+                let auth: Option<AuthenticationMethod> = Some(proxy.into());
                 let client_src = TargetAddr::Ip("[::]:0".parse().unwrap());
                 let udp_socket = UdpSocket::bind(local_addr).await?;
-                let socket = TokioTcpStream::connect(proxy.server.clone()).await?;
+                let socket = TokioTcpStream::connect(proxy.server).await?;
                 socket.set_nodelay(true)?;
                 let (proxy_stream, proxy_addr) =
                     connect_socks5_server(Socks5Command::UDPAssociate, socket, client_src, auth)
@@ -129,16 +117,10 @@ pub async fn quic_binder(
     match proxy {
         Some(proxy) => match proxy.proto {
             ProxyProtocol::Socks5 => {
-                let auth = proxy
-                    .username
-                    .clone()
-                    .map(|username| AuthenticationMethod::Password {
-                        username,
-                        password: proxy.password.clone().unwrap_or_default(),
-                    });
+                let auth: Option<AuthenticationMethod> = Some(proxy.into());
                 let client_src = TargetAddr::Ip("[::]:0".parse().unwrap());
                 let udp_socket = UdpSocket::bind(local_addr).await?;
-                let socket = TokioTcpStream::connect(proxy.server.clone()).await?;
+                let socket = TokioTcpStream::connect(proxy.server).await?;
                 socket.set_nodelay(true)?;
                 let (proxy_stream, proxy_addr) =
                     connect_socks5_server(Socks5Command::UDPAssociate, socket, client_src, auth)
@@ -180,6 +162,19 @@ pub async fn connect_socks5_server(
         .unwrap();
     let bind_addr = socks_stream.request(cmd, target_addr).await.unwrap();
     Ok((socks_stream, bind_addr))
+}
+
+impl From<&ProxyConfig> for AuthenticationMethod {
+    fn from(value: &ProxyConfig) -> Self {
+        value
+            .username
+            .as_deref()
+            .map(|username| AuthenticationMethod::Password {
+                username: username.to_string(),
+                password: value.password.as_deref().unwrap_or_default().to_string(),
+            })
+            .unwrap_or(AuthenticationMethod::None)
+    }
 }
 
 pub enum TcpStream {
@@ -233,7 +228,7 @@ impl tokio::io::AsyncWrite for TcpStream {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct ProxyConfig {
     pub proto: ProxyProtocol,
     pub server: SocketAddr,
@@ -299,19 +294,19 @@ impl FromStr for ProxyConfig {
         Ok(Self {
             proto,
             server,
-            username: username.map(|s| s.to_owned()),
-            password: password.map(|s| s.to_owned()),
+            username: username.map(|s| s.to_string()),
+            password: password.map(|s| s.to_string()),
         })
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy)]
 pub enum ProxyProtocol {
     Socks5,
     Http,
 }
 
-#[derive(Error, Debug, PartialEq, Eq)]
+#[derive(Error, Debug)]
 pub enum ProxyParseError {
     #[error("UnexpectedSchema {0:?}")]
     UnexpectedSchema(String),

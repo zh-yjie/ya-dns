@@ -2,12 +2,13 @@ use futures::Future;
 #[cfg(any(feature = "dns-over-h3", feature = "dns-over-quic"))]
 use hickory_proto::runtime::QuicSocketBinder;
 use hickory_proto::runtime::{
-    iocompat::AsyncIoTokioAsStd, RuntimeProvider, TokioHandle, TokioTime,
+    RuntimeProvider, TokioHandle, TokioTime, iocompat::AsyncIoTokioAsStd,
 };
 use hickory_resolver::name_server::GenericConnector;
 use std::io;
 use std::net::SocketAddr;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::timeout;
 
@@ -19,14 +20,14 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 /// The Tokio Runtime for async execution
 #[derive(Clone)]
 pub struct ProxyRuntimeProvider {
-    proxy: Option<ProxyConfig>,
+    proxy: Option<Arc<ProxyConfig>>,
     handle: TokioHandle,
 }
 
 impl ProxyRuntimeProvider {
     pub fn new(proxy: Option<ProxyConfig>) -> Self {
         Self {
-            proxy: proxy.clone(),
+            proxy: proxy.map(Arc::new),
             handle: TokioHandle::default(),
         }
     }
@@ -50,7 +51,7 @@ impl RuntimeProvider for ProxyRuntimeProvider {
     ) -> Pin<Box<dyn Send + Future<Output = io::Result<Self::Tcp>>>> {
         let proxy_config = self.proxy.clone();
         Box::pin(async move {
-            let future = resolver_proxy::connect_tcp(server_addr, bind_addr, proxy_config.as_ref());
+            let future = resolver_proxy::connect_tcp(server_addr, bind_addr, proxy_config.as_deref());
             let wait_for = wait_for.unwrap_or(CONNECT_TIMEOUT);
             match timeout(wait_for, future).await {
                 Ok(Ok(socket)) => Ok(AsyncIoTokioAsStd(socket)),
@@ -70,7 +71,7 @@ impl RuntimeProvider for ProxyRuntimeProvider {
     ) -> Pin<Box<dyn Send + Future<Output = io::Result<Self::Udp>>>> {
         let proxy_config = self.proxy.clone();
         Box::pin(async move {
-            let future = resolver_proxy::bind_udp(local_addr, server_addr, proxy_config.as_ref());
+            let future = resolver_proxy::bind_udp(local_addr, server_addr, proxy_config.as_deref());
             let wait_for = CONNECT_TIMEOUT;
             match timeout(wait_for, future).await {
                 Ok(Ok(socket)) => Ok(socket),
@@ -97,7 +98,7 @@ impl QuicSocketBinder for ProxyRuntimeProvider {
         server_addr: SocketAddr,
     ) -> Result<std::sync::Arc<dyn quinn::AsyncUdpSocket>, io::Error> {
         let socket = futures::executor::block_on(async {
-            let future = resolver_proxy::quic_binder(local_addr, server_addr, self.proxy.as_ref());
+            let future = resolver_proxy::quic_binder(local_addr, server_addr, self.proxy.as_deref());
             let wait_for = CONNECT_TIMEOUT;
             match timeout(wait_for, future).await {
                 Ok(Ok(socket)) => Ok(socket),

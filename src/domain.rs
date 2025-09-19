@@ -1,7 +1,7 @@
 use publicsuffix::{List, Psl};
 use std::{io, str::FromStr};
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct DomainSuffix {
     list: List,
 }

@@ -56,9 +56,6 @@ tokio = "1"
 toml = "0.9"
 url = "2"
 
-[target.'cfg(not(target_os = "windows"))'.dependencies]
-mimalloc = "0.1"
-
 [profile.release]
 lto = true
 opt-level = 3

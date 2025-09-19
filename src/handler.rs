@@ -10,7 +10,7 @@ use log::debug;
 use std::time::Duration;
 use tokio::runtime::{Builder, Runtime};
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 struct RequestResult {
     answers: Option<Vec<Record>>,
     name_servers: Option<Vec<Record>>,
@@ -115,7 +115,7 @@ impl Handler {
                                 Some(soa) => {
                                     let mut result =
                                         RequestResult::new_with_code(ResponseCode::NXDomain);
-                                    result.set_soa(vec![soa.clone().into_record_of_rdata()]);
+                                    result.set_soa(vec![soa.into_record_of_rdata()]);
                                     lookup_result = Some(result);
                                 }
                                 None => (),
