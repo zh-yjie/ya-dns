@@ -49,25 +49,25 @@ impl From<(&Upstream, &ResolverOpts)> for RecursiveResolver {
                 address,
                 tls_host,
                 proxy,
-            } => (Protocol::Tls, address, Some(tls_host.to_string()), proxy),
+            } => (Protocol::Tls, address, Some(tls_host.clone()), proxy),
             #[cfg(feature = "dns-over-https")]
             Upstream::HttpsUpstream {
                 address,
                 tls_host,
                 proxy,
-            } => (Protocol::Https, address, Some(tls_host.to_string()), proxy),
+            } => (Protocol::Https, address, Some(tls_host.clone()), proxy),
             #[cfg(feature = "dns-over-h3")]
             Upstream::H3Upstream {
                 address,
                 tls_host,
                 proxy,
-            } => (Protocol::H3, address, Some(tls_host.to_string()), proxy),
+            } => (Protocol::H3, address, Some(tls_host.clone()), proxy),
             #[cfg(feature = "dns-over-quic")]
             Upstream::QuicUpstream {
                 address,
                 tls_host,
                 proxy,
-            } => (Protocol::Quic, address, Some(tls_host.to_string()), proxy),
+            } => (Protocol::Quic, address, Some(tls_host.clone()), proxy),
         };
         let mut resolver_config = ResolverConfig::new();
         address.iter().for_each(|addr| {

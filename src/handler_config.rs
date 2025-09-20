@@ -33,7 +33,7 @@ impl From<Config> for HandlerConfig {
         let resolvers: HashMap<_, _> = config
             .upstreams
             .iter()
-            .map(|(name, upstream)| (name.to_string(), Arc::new((upstream, &opts).into())))
+            .map(|(name, upstream)| (name.clone(), Arc::new((upstream, &opts).into())))
             .collect();
 
         let domains: HashMap<_, _> = config
@@ -41,7 +41,7 @@ impl From<Config> for HandlerConfig {
             .iter()
             .map(|(name, domains)| {
                 (
-                    name.to_string(),
+                    name.clone(),
                     Domains {
                         regex_set: RegexSet::new(&domains.regex_set).unwrap(),
                         suffix: domains.suffix_set.join("\n").parse().unwrap(),

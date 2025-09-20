@@ -1,6 +1,6 @@
 use crate::{config::RuleAction, filter, handler_config::HandlerConfig};
 use hickory_proto::{op::LowerQuery, rr::Record};
-use hickory_resolver::ResolveError;
+use hickory_resolver::{ResolveError, lookup::Lookup};
 use hickory_server::{
     authority::MessageResponseBuilder,
     proto::op::{Header, MessageType, OpCode, ResponseCode},
@@ -12,7 +12,7 @@ use tokio::runtime::{Builder, Runtime};
 
 #[derive(Debug)]
 struct RequestResult {
-    answers: Option<Vec<Record>>,
+    answers: Option<Lookup>,
     name_servers: Option<Vec<Record>>,
     soa: Option<Vec<Record>>,
     code: ResponseCode,
@@ -28,7 +28,7 @@ impl RequestResult {
             code,
         }
     }
-    pub fn set_answers(&mut self, answers: Vec<Record>) {
+    pub fn set_answers(&mut self, answers: Lookup) {
         self.answers = Some(answers);
     }
     pub fn set_name_server(&mut self, name_servers: Vec<Record>) {
@@ -102,9 +102,7 @@ impl Handler {
                                         debug!("Use result from {}", name);
                                         let mut result =
                                             RequestResult::new_with_code(ResponseCode::NoError);
-                                        result.set_answers(
-                                            lookup.records().iter().cloned().collect(),
-                                        );
+                                        result.set_answers(lookup);
                                         lookup_result = Some(result);
                                         break;
                                     }
@@ -155,14 +153,14 @@ impl RequestHandler for Handler {
         } else {
             RequestResult::new_with_code(ResponseCode::FormErr)
         };
-        let answers = result.answers.unwrap_or_default();
-        let name_servers: Vec<Record> = result.name_servers.unwrap_or_default();
-        let soa: Vec<Record> = result.soa.unwrap_or_default();
+        let answers = result.answers.as_ref().map(Lookup::records).unwrap_or(&[]);
+        let name_servers = result.name_servers.unwrap_or_default();
+        let soa = result.soa.unwrap_or_default();
         let builder = MessageResponseBuilder::from_message_request(request);
         let mut header = Header::response_from_request(request.header());
         header.set_response_code(result.code);
         header.set_recursion_available(true);
-        let message = builder.build(header, answers.iter(), name_servers.iter(), soa.iter(), &[]);
+        let message = builder.build(header, answers, name_servers.iter(), soa.iter(), &[]);
         response.send_response(message).await.unwrap()
     }
 }

@@ -6,8 +6,8 @@ use ipnet::IpNet;
 use serde_derive::Deserialize;
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::prelude::*;
 use std::io::BufReader;
+use std::io::prelude::*;
 use std::net::IpAddr;
 use std::net::SocketAddr;
 use std::str::FromStr;
@@ -250,7 +250,7 @@ impl UpstreamConfig {
                 };
                 match address {
                     Ok(addr) => Ok(addr),
-                    Err(e) => Err(ConfigError::InvalidAddress(e, addr.to_string())),
+                    Err(e) => Err(ConfigError::InvalidAddress(e, addr.clone())),
                 }
             })
             .collect::<Result<Vec<_>, ConfigError>>()
