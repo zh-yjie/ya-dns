@@ -165,7 +165,7 @@ impl ConfigBuilder {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct ResolverOpts {
     pub timeout: Duration,
     pub ip_strategy: Option<LookupIpStrategy>,

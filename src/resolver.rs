@@ -4,24 +4,34 @@ use hickory_resolver::config::{NameServerConfig, ResolverConfig, ResolverOpts};
 use hickory_resolver::lookup::Lookup;
 use hickory_resolver::{ResolveError, Resolver};
 
-use crate::config::Upstream;
+use crate::config::{ResolverOpts as MyResolverOpts, Upstream};
 use crate::resolver_runtime_provider::{ProxyConnectionProvider, ProxyRuntimeProvider};
 
 #[derive(Debug)]
 pub struct RecursiveResolver {
     pub resolver: Resolver<ProxyConnectionProvider>,
+    pub options: MyResolverOpts,
 }
 
 impl RecursiveResolver {
     pub fn new(
         resolver_config: ResolverConfig,
-        options: ResolverOpts,
+        resolver_opts: Option<MyResolverOpts>,
         provider: ProxyConnectionProvider,
     ) -> Self {
+        let mut opts = ResolverOpts::default();
+        let options = resolver_opts.unwrap_or(MyResolverOpts {
+            timeout: opts.timeout,
+            ip_strategy: None,
+            cache_size: opts.cache_size,
+        });
+        opts.timeout = options.timeout;
+        opts.ip_strategy = options.ip_strategy.unwrap_or_default();
+        opts.cache_size = options.cache_size;
         let mut builder = Resolver::builder_with_config(resolver_config, provider);
-        *builder.options_mut() = options;
+        *builder.options_mut() = opts;
         let resolver = builder.build();
-        RecursiveResolver { resolver }
+        RecursiveResolver { resolver, options }
     }
 
     pub async fn resolve(
@@ -30,17 +40,20 @@ impl RecursiveResolver {
         record_type: RecordType,
     ) -> Result<Lookup, ResolveError> {
         match record_type {
-            RecordType::A | RecordType::AAAA => match self.resolver.lookup_ip(domain).await {
-                Ok(res) => Ok(res.into()),
-                Err(e) => Err(e),
+            RecordType::A | RecordType::AAAA => match self.options.ip_strategy {
+                Some(_) => match self.resolver.lookup_ip(domain).await {
+                    Ok(res) => Ok(res.into()),
+                    Err(e) => Err(e),
+                },
+                None => self.resolver.lookup(domain, record_type).await,
             },
             _ => self.resolver.lookup(domain, record_type).await,
         }
     }
 }
 
-impl From<(&Upstream, &ResolverOpts)> for RecursiveResolver {
-    fn from((upstream, options): (&Upstream, &ResolverOpts)) -> Self {
+impl From<(&Upstream, Option<MyResolverOpts>)> for RecursiveResolver {
+    fn from((upstream, config): (&Upstream, Option<MyResolverOpts>)) -> Self {
         let (protocol, address, tls_host, proxy) = match upstream {
             Upstream::UdpUpstream { address, proxy } => (Protocol::Udp, address, None, proxy),
             Upstream::TcpUpstream { address, proxy } => (Protocol::Tcp, address, None, proxy),
@@ -78,7 +91,7 @@ impl From<(&Upstream, &ResolverOpts)> for RecursiveResolver {
         let runtime_provider =
             ProxyRuntimeProvider::new(proxy.as_ref().map(|p| p.parse().unwrap()));
         let provider = ProxyConnectionProvider::new(runtime_provider);
-        RecursiveResolver::new(resolver_config, options.clone(), provider)
+        RecursiveResolver::new(resolver_config, config, provider)
     }
 }
 
@@ -96,7 +109,7 @@ mod tests {
                 address: vec![dns_addr],
                 proxy: None,
             },
-            &ResolverOpts::default(),
+            None,
         )
             .into();
         let response = resolver.resolve("dns.google", RecordType::A).await.unwrap();
@@ -115,7 +128,7 @@ mod tests {
                 address: vec![dns_addr],
                 proxy: None,
             },
-            &ResolverOpts::default(),
+            None,
         )
             .into();
         let response = resolver.resolve("dns.google", RecordType::A).await.unwrap();
@@ -137,7 +150,7 @@ mod tests {
                 proxy: None,
                 tls_host: dns_host,
             },
-            &ResolverOpts::default(),
+            None,
         )
             .into();
         let response = resolver.resolve("dns.google", RecordType::A).await.unwrap();
@@ -159,7 +172,7 @@ mod tests {
                 proxy: None,
                 tls_host: dns_host,
             },
-            &ResolverOpts::default(),
+            None,
         )
             .into();
         let response = resolver.resolve("dns.google", RecordType::A).await.unwrap();
@@ -181,7 +194,7 @@ mod tests {
                 proxy: None,
                 tls_host: dns_host,
             },
-            &ResolverOpts::default(),
+            None,
         )
             .into();
         let response = resolver.resolve("dns.google", RecordType::A).await.unwrap();
