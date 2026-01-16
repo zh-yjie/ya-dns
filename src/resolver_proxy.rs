@@ -111,9 +111,16 @@ pub async fn quic_binder(
     local_addr: SocketAddr,
     _server_addr: SocketAddr,
     proxy: Option<&ProxyConfig>,
-) -> io::Result<Socks5QuicSocket> {
+) -> io::Result<std::sync::Arc<dyn quinn::AsyncUdpSocket>> {
     use quinn::{Runtime, TokioRuntime};
 
+    let bind_socket = || {
+        let socket = std::net::UdpSocket::bind(local_addr).map(|s| {
+            let _ = s.set_nonblocking(true);
+            s
+        });
+        TokioRuntime.wrap_udp_socket(socket?)
+    };
     match proxy {
         Some(proxy) => match proxy.proto {
             ProxyProtocol::Socks5 => {
@@ -127,19 +134,17 @@ pub async fn quic_binder(
                         .await?;
                 let proxy_addr_resolved = proxy_addr.to_socket_addrs()?.next().unwrap();
                 udp_socket.connect(proxy_addr_resolved).await?;
-                Ok(Socks5QuicSocket::proxy(
-                    TokioRuntime.wrap_udp_socket(udp_socket.into_std()?)?,
-                    Some(proxy_stream),
-                    Some(proxy_addr_resolved),
-                ))
+                let quinn_udp_socket: std::sync::Arc<dyn quinn::AsyncUdpSocket> =
+                    std::sync::Arc::new(Socks5QuicSocket::new(
+                        udp_socket.into_std()?,
+                        proxy_stream,
+                        proxy_addr_resolved,
+                    ));
+                Ok(quinn_udp_socket)
             }
-            _ => Ok(Socks5QuicSocket::direct(
-                TokioRuntime.wrap_udp_socket(std::net::UdpSocket::bind(local_addr)?)?,
-            )),
+            _ => bind_socket(),
         },
-        None => Ok(Socks5QuicSocket::direct(
-            TokioRuntime.wrap_udp_socket(std::net::UdpSocket::bind(local_addr)?)?,
-        )),
+        None => bind_socket(),
     }
 }
 
@@ -423,24 +428,23 @@ fn read<const N: usize>(buf: &[u8]) -> [u8; N] {
 #[cfg(any(feature = "dns-over-h3", feature = "dns-over-quic"))]
 #[derive(Debug)]
 pub struct Socks5QuicSocket {
-    quic_socket: std::sync::Arc<dyn quinn::AsyncUdpSocket>,
-    socks5_stream: Option<Socks5Stream<TokioTcpStream>>,
-    proxy_addr: Option<SocketAddr>,
+    io: tokio::net::UdpSocket,
+    inner: quinn::udp::UdpSocketState,
+    _socks5_stream: Socks5Stream<TokioTcpStream>,
+    proxy_addr: SocketAddr,
 }
 
 #[cfg(any(feature = "dns-over-h3", feature = "dns-over-quic"))]
 impl Socks5QuicSocket {
-    pub fn direct(quic_socket: std::sync::Arc<dyn quinn::AsyncUdpSocket>) -> Self {
-        Self::proxy(quic_socket, None, None)
-    }
-    pub fn proxy(
-        quic_socket: std::sync::Arc<dyn quinn::AsyncUdpSocket>,
-        socks5_stream: Option<Socks5Stream<TokioTcpStream>>,
-        proxy_addr: Option<SocketAddr>,
+    pub fn new(
+        sock: std::net::UdpSocket,
+        _socks5_stream: Socks5Stream<TokioTcpStream>,
+        proxy_addr: SocketAddr,
     ) -> Self {
         Socks5QuicSocket {
-            quic_socket,
-            socks5_stream,
+            inner: quinn::udp::UdpSocketState::new((&sock).into()).unwrap(),
+            io: tokio::net::UdpSocket::from_std(sock).unwrap(),
+            _socks5_stream,
             proxy_addr,
         }
     }
@@ -449,58 +453,117 @@ impl Socks5QuicSocket {
 #[cfg(any(feature = "dns-over-h3", feature = "dns-over-quic"))]
 impl quinn::AsyncUdpSocket for Socks5QuicSocket {
     fn create_io_poller(self: std::sync::Arc<Self>) -> Pin<Box<dyn quinn::UdpPoller>> {
-        self.quic_socket.clone().create_io_poller()
+        Box::pin(UdpPollHelper::new(move || {
+            let socket = self.clone();
+            async move { socket.io.writable().await }
+        }))
     }
 
     fn try_send(&self, transmit: &quinn::udp::Transmit) -> io::Result<()> {
-        let mut destination = transmit.destination;
-        let mut contents = Vec::new();
-        if self.socks5_stream.is_some() {
-            contents = new_udp_header(destination).unwrap();
-            destination = self.proxy_addr.unwrap();
-        }
-        contents.extend_from_slice(transmit.contents);
-        let new_transmit = quinn::udp::Transmit {
-            destination: destination,
-            ecn: transmit.ecn,
-            contents: &contents,
-            segment_size: transmit.segment_size,
-            src_ip: transmit.src_ip,
-        };
-        self.quic_socket.try_send(&new_transmit)
+        self.io.try_io(tokio::io::Interest::WRITABLE, || {
+            let mut destination = transmit.destination;
+            let mut contents = new_udp_header(destination).unwrap();
+            destination = self.proxy_addr;
+            contents.extend_from_slice(transmit.contents);
+            let new_transmit = quinn::udp::Transmit {
+                destination: destination,
+                ecn: transmit.ecn,
+                contents: &contents,
+                segment_size: transmit.segment_size,
+                src_ip: transmit.src_ip,
+            };
+            self.inner.send((&self.io).into(), &new_transmit)
+        })
     }
 
     fn poll_recv(
         &self,
         cx: &mut Context,
-        bufs: &mut [io::IoSliceMut<'_>],
+        bufs: &mut [std::io::IoSliceMut<'_>],
         meta: &mut [quinn::udp::RecvMeta],
     ) -> Poll<io::Result<usize>> {
-        let size = ready!(self.quic_socket.poll_recv(cx, bufs, meta))?;
-        if self.socks5_stream.is_some() {
-            for i in 0..size {
-                let buf: &[u8] = bufs[i].as_ref();
-                let (_addr, data, _len) = parse_socks5_udp(&buf);
-                let buffer = data.to_vec();
-                bufs[i] = io::IoSliceMut::new(Box::leak(buffer.into_boxed_slice()));
+        loop {
+            ready!(self.io.poll_recv_ready(cx))?;
+            if let Ok(res) = self.io.try_io(tokio::io::Interest::READABLE, || {
+                let size = self.inner.recv((&self.io).into(), bufs, meta)?;
+                for i in 0..size {
+                    let (addr, data_ptr, data_len) = {
+                        let packet_slice = &bufs[i][..meta[i].len];
+                        let (addr, data_slice, data_len) = parse_socks5_udp(packet_slice);
+                        (addr, data_slice.as_ptr(), data_len)
+                    };
+                    unsafe {
+                        let buf_ptr = bufs[i].as_mut_ptr();
+                        std::ptr::copy(data_ptr, buf_ptr, data_len);
+                    }
+                    meta[i].len = data_len;
+                    meta[i].addr = addr;
+                }
+                Ok(size)
+            }) {
+                return Poll::Ready(Ok(res));
             }
         }
-        Poll::Ready(Ok(size))
     }
 
-    fn local_addr(&self) -> io::Result<SocketAddr> {
-        self.quic_socket.local_addr()
-    }
-
-    fn max_transmit_segments(&self) -> usize {
-        self.quic_socket.max_transmit_segments()
-    }
-
-    fn max_receive_segments(&self) -> usize {
-        self.quic_socket.max_receive_segments()
+    fn local_addr(&self) -> io::Result<std::net::SocketAddr> {
+        self.io.local_addr()
     }
 
     fn may_fragment(&self) -> bool {
-        self.quic_socket.may_fragment()
+        self.inner.may_fragment()
+    }
+
+    fn max_transmit_segments(&self) -> usize {
+        self.inner.max_gso_segments()
+    }
+
+    fn max_receive_segments(&self) -> usize {
+        self.inner.gro_segments()
+    }
+}
+
+#[cfg(any(feature = "dns-over-h3", feature = "dns-over-quic"))]
+pin_project_lite::pin_project! {
+    struct UdpPollHelper<MakeFut, Fut> {
+        make_fut: MakeFut,
+        #[pin]
+        fut: Option<Fut>,
+    }
+}
+
+#[cfg(any(feature = "dns-over-h3", feature = "dns-over-quic"))]
+impl<MakeFut, Fut> UdpPollHelper<MakeFut, Fut> {
+    fn new(make_fut: MakeFut) -> Self {
+        Self {
+            make_fut,
+            fut: None,
+        }
+    }
+}
+
+#[cfg(any(feature = "dns-over-h3", feature = "dns-over-quic"))]
+impl<MakeFut, Fut> quinn::UdpPoller for UdpPollHelper<MakeFut, Fut>
+where
+    MakeFut: Fn() -> Fut + Send + Sync + 'static,
+    Fut: Future<Output = io::Result<()>> + Send + Sync + 'static,
+{
+    fn poll_writable(self: Pin<&mut Self>, cx: &mut Context) -> Poll<io::Result<()>> {
+        let mut this = self.project();
+        if this.fut.is_none() {
+            this.fut.set(Some((this.make_fut)()));
+        }
+        let result = this.fut.as_mut().as_pin_mut().unwrap().poll(cx);
+        if result.is_ready() {
+            this.fut.set(None);
+        }
+        result
+    }
+}
+
+#[cfg(any(feature = "dns-over-h3", feature = "dns-over-quic"))]
+impl<MakeFut, Fut> core::fmt::Debug for UdpPollHelper<MakeFut, Fut> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("UdpPollHelper").finish_non_exhaustive()
     }
 }

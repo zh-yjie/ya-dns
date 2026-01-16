@@ -51,7 +51,8 @@ impl RuntimeProvider for ProxyRuntimeProvider {
     ) -> Pin<Box<dyn Send + Future<Output = io::Result<Self::Tcp>>>> {
         let proxy_config = self.proxy.clone();
         Box::pin(async move {
-            let future = resolver_proxy::connect_tcp(server_addr, bind_addr, proxy_config.as_deref());
+            let future =
+                resolver_proxy::connect_tcp(server_addr, bind_addr, proxy_config.as_deref());
             let wait_for = wait_for.unwrap_or(CONNECT_TIMEOUT);
             match timeout(wait_for, future).await {
                 Ok(Ok(socket)) => Ok(AsyncIoTokioAsStd(socket)),
@@ -98,7 +99,8 @@ impl QuicSocketBinder for ProxyRuntimeProvider {
         server_addr: SocketAddr,
     ) -> Result<std::sync::Arc<dyn quinn::AsyncUdpSocket>, io::Error> {
         let socket = futures::executor::block_on(async {
-            let future = resolver_proxy::quic_binder(local_addr, server_addr, self.proxy.as_deref());
+            let future =
+                resolver_proxy::quic_binder(local_addr, server_addr, self.proxy.as_deref());
             let wait_for = CONNECT_TIMEOUT;
             match timeout(wait_for, future).await {
                 Ok(Ok(socket)) => Ok(socket),
@@ -109,7 +111,7 @@ impl QuicSocketBinder for ProxyRuntimeProvider {
                 )),
             }
         })?;
-        Ok(std::sync::Arc::new(socket))
+        Ok(socket)
     }
 }
 
