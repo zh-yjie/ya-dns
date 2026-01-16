@@ -19,9 +19,15 @@ impl FromStr for DomainSuffix {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let list = match s.parse() {
             Ok(list) => Self { list },
-            Err(_) => Self { list: List::new() },
+            Err(_) => Self::default(),
         };
         Ok(list)
+    }
+}
+
+impl Default for DomainSuffix {
+    fn default() -> Self {
+        Self { list: List::new() }
     }
 }
 

@@ -38,8 +38,8 @@ pub struct Config {
     pub default_upstreams: Vec<String>,
     pub resolver_opts: ResolverOpts,
     pub upstreams: HashMap<String, Upstream>,
-    pub domains: HashMap<String, Domains>,
-    pub ranges: HashMap<String, IpRange>,
+    pub domains: HashMap<String, DomainsConf>,
+    pub ranges: HashMap<String, IpRangeConf>,
     pub request_rules: Vec<RequestRule>,
     pub response_rules: Vec<ResponseRule>,
 }
@@ -120,25 +120,25 @@ impl ConfigBuilder {
         if default_upstreams.is_empty() {
             return Err(ConfigError::NoUpstream);
         }
+        /*
+                let domains = self
+                    .domains
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|(key, domains)| domains.build().map(move |domains| (key, domains)))
+                    .collect::<Result<HashMap<_, _>, ConfigError>>()?;
 
-        let domains = self
-            .domains
-            .unwrap_or_default()
-            .into_iter()
-            .map(|(key, domains)| domains.build().map(move |domains| (key, domains)))
-            .collect::<Result<HashMap<_, _>, ConfigError>>()?;
-
-        let ranges = self
-            .ranges
-            .unwrap_or_default()
-            .into_iter()
-            .map(|(key, conf)| {
-                let mut range = IpRange::new();
-                conf.read_to(&mut range).map(|()| (key, range))
-            })
-            .collect::<Result<HashMap<_, _>, AddrParseError>>()
-            .unwrap();
-
+                let ranges = self
+                    .ranges
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|(key, conf)| {
+                        let mut range = IpRange::new();
+                        conf.read_to(&mut range).map(|()| (key, range))
+                    })
+                    .collect::<Result<HashMap<_, _>, AddrParseError>>()
+                    .unwrap();
+        */
         let request_rules: Vec<RequestRule> = self
             .requests
             .unwrap_or_default()
@@ -157,8 +157,8 @@ impl ConfigBuilder {
             default_upstreams,
             resolver_opts,
             upstreams,
-            domains,
-            ranges,
+            domains: self.domains.unwrap_or_default(),
+            ranges: self.ranges.unwrap_or_default(),
             request_rules,
             response_rules: self.responses.unwrap_or_default(),
         })
@@ -336,13 +336,14 @@ impl NetworkType {
 }
 
 #[derive(Debug, Deserialize)]
-struct IpRangeConf {
+pub struct IpRangeConf {
     files: Option<Vec<String>>,
     list: Option<Vec<String>>,
 }
 
 impl IpRangeConf {
-    fn read_to(&self, range: &mut IpRange) -> Result<(), AddrParseError> {
+    pub fn build(&self) -> Result<IpRange, AddrParseError> {
+        let mut range = IpRange::new();
         if let Some(files) = &self.files {
             for file in files {
                 let file = File::open(file).unwrap();
@@ -367,7 +368,7 @@ impl IpRangeConf {
         }
 
         range.simplify();
-        Ok(())
+        Ok(range)
     }
 }
 
@@ -378,13 +379,13 @@ pub struct Domains {
 }
 
 #[derive(Debug, Deserialize)]
-struct DomainsConf {
+pub struct DomainsConf {
     files: Option<Vec<String>>,
     list: Option<Vec<String>>,
 }
 
 impl DomainsConf {
-    fn build(self) -> Result<Domains, ConfigError> {
+    pub fn build(self) -> Result<Domains, ConfigError> {
         let mut regex_set = Vec::new();
         let mut suffix_set = Vec::new();
         suffix_set.push(String::from("// BEGIN ICANN DOMAINS"));

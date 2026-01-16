@@ -22,6 +22,15 @@ pub struct Domains {
     pub suffix: DomainSuffix,
 }
 
+impl Default for Domains {
+    fn default() -> Self {
+        Self {
+            regex_set: RegexSet::default(),
+            suffix: DomainSuffix::default(),
+        }
+    }
+}
+
 impl From<Config> for HandlerConfig {
     fn from(config: Config) -> Self {
         // debug!(STDERR, "{:#?}", config);
@@ -38,15 +47,25 @@ impl From<Config> for HandlerConfig {
 
         let domains: HashMap<_, _> = config
             .domains
-            .iter()
-            .map(|(name, domains)| {
-                (
+            .into_iter()
+            .map(|(name, domains)| match domains.build() {
+                Ok(domains) => (
                     name.clone(),
                     Domains {
-                        regex_set: RegexSet::new(&domains.regex_set).unwrap(),
-                        suffix: domains.suffix_set.join("\n").parse().unwrap(),
+                        regex_set: RegexSet::new(&domains.regex_set).unwrap_or_default(),
+                        suffix: domains.suffix_set.join("\n").parse().unwrap_or_default(),
                     },
-                )
+                ),
+                Err(_) => (name.clone(), Domains::default()),
+            })
+            .collect();
+
+        let ranges: HashMap<_, _> = config
+            .ranges
+            .into_iter()
+            .map(|(key, ip_range)| match ip_range.build() {
+                Ok(ip_range) => (key, ip_range),
+                Err(_) => (key, IpRange::default()),
             })
             .collect();
 
@@ -54,7 +73,7 @@ impl From<Config> for HandlerConfig {
             defaults: Arc::new(config.default_upstreams),
             resolvers: Arc::new(resolvers),
             domains: Arc::new(domains),
-            ranges: Arc::new(config.ranges),
+            ranges: Arc::new(ranges),
             request_rules: Arc::new(config.request_rules),
             response_rules: Arc::new(config.response_rules),
         }
