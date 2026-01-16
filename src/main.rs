@@ -1,14 +1,13 @@
-use crate::config::{Config, ConfigBuilder};
+use crate::config::{Config, ConfigBuilder, ConfigError};
 use crate::handler::Handler;
+use crate::option::Args;
 use clap::Parser;
-use config::ConfigError;
 use hickory_server::ServerFuture;
-use log::{error, info};
-use option::Args;
-use std::fs::File;
+use log::info;
+use std::io;
+use std::path::{Path, PathBuf};
 use std::process::exit;
 use std::time::Duration;
-use std::{io, io::prelude::*};
 use tokio;
 use tokio::net::{TcpListener, UdpSocket};
 
@@ -31,7 +30,13 @@ async fn main() -> io::Result<()> {
         .server_addr(([0, 0, 0, 0], 5555))
         .init();
 
-    let config = config().unwrap_or_log();
+    let config = match config() {
+        Ok(cfg) => cfg,
+        Err(e) => {
+            eprintln!("Error loading configuration: {}", e);
+            exit(1);
+        }
+    };
 
     #[cfg(feature = "logging")]
     init_logger(config.log_level);
@@ -60,32 +65,22 @@ fn init_logger(log_level: log::LevelFilter) {
 
 fn config() -> Result<Config, ConfigError> {
     let args = Args::parse();
-    let config_path = args.config;
-    let mut file = File::open(config_path).unwrap();
-    let mut content = String::new();
-    file.read_to_string(&mut content).unwrap();
+    let config_path = match args.config {
+        Some(path) => PathBuf::from(path),
+        None => {
+            let default_files = ["config.toml", "config.yaml", "config.yml"];
+            let mut found_path = None;
+            for file in &default_files {
+                let path = Path::new(file);
+                if path.exists() {
+                    found_path = Some(path.to_path_buf());
+                    break;
+                }
+            }
+            found_path.ok_or(ConfigError::FileNotFound)?
+        }
+    };
 
-    let builder: ConfigBuilder = toml::from_str(&content).unwrap();
+    let builder = ConfigBuilder::from_file(&config_path)?;
     builder.build()
-}
-
-trait ShouldSuccess {
-    type Item;
-
-    fn unwrap_or_log(self) -> Self::Item;
-}
-
-impl<T, F> ShouldSuccess for Result<T, F>
-where
-    F: Into<ConfigError>,
-{
-    type Item = T;
-
-    fn unwrap_or_log(self) -> T {
-        self.unwrap_or_else(|e| {
-            let e: ConfigError = e.into();
-            error!("{}", e);
-            exit(1);
-        })
-    }
 }

@@ -1,0 +1,86 @@
+bind: 127.0.0.1:5300
+upstreams:
+  dnspod:
+    address:
+      - 119.29.29.29
+    network: udp
+  alidns:
+    address:
+      - 223.5.5.5
+      - 223.6.6.6
+    network: udp
+  google:
+    address:
+      - 8.8.8.8
+      - 8.8.4.4
+    network: tls
+    proxy: socks5://127.0.0.1:1080
+    tls-host: dns.google
+  cloudflare:
+    address:
+      - 1.1.1.1
+      - 1.0.0.1
+    network: tls
+    proxy: socks5://127.0.0.1:1080
+    tls-host: cloudflare-dns.com
+  opennic:
+    address:
+      - 134.195.4.2
+      - 192.3.165.37
+    default: false
+    network: udp
+domains:
+  opennic:
+    list:
+      - .bbs
+      - .chan
+      - .cyb
+      - .dyn
+      - .geek
+      - .gopher
+      - .indy
+      - .libre
+      - .neo
+      - .null
+      - .o
+      - .oss
+      - .oz
+      - .parody
+      - .pirate
+  proxy:
+    # download from https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/proxy-list.txt
+    files:
+      - proxy-list.txt
+  direct:
+    # download from https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/direct-list.txt
+    files:
+      - direct-list.txt
+ranges:
+  cn:
+    # download from https://www.ipdeny.com/ipblocks/data/countries/cn.zone
+    files:
+      - cn.txt
+requests:
+  - domains:
+      - opennic
+    upstreams:
+      - opennic
+  - domains:
+      - proxy
+    upstreams:
+      - google
+      - cloudflare
+  - domains:
+      - direct
+    upstreams:
+      - dnspod
+      - alidns
+responses:
+  - action: drop
+    domains:
+      - "!direct"
+    ranges:
+      - "!cn"
+    upstreams:
+      - dnspod
+      - alidns

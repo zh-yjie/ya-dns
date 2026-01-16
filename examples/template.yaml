@@ -1,0 +1,199 @@
+# This file is just a demostration of all configurable options and has NO practical meanings.
+
+# Root privilege may be required if you specify a port below 1024.
+bind: 127.0.0.1:5300 # the address that ya-dns listens on
+
+# Specify the log level
+log: info # error warn info debug trace
+
+# Configuration for the Resolver
+resolver_opts:
+    # Specify the timeout for a request. Defaults to 5 seconds
+    timeout: 5
+    # The strategy for the Resolver to use when lookup Ipv4 or Ipv6 addresses.
+    # Available lookup ip strategy options:
+    #   None, Query records by client query type  (default)
+    #   Ipv4Only, Only query for A (Ipv4) records
+    #   Ipv6Only, Only query for AAAA (Ipv6) records
+    #   Ipv4AndIpv6, Query for A and AAAA in parallel
+    #   Ipv6thenIpv4, Query for Ipv6 if that fails, query for Ipv4
+    #   Ipv4thenIpv6, Query for Ipv4 if that fails, query for Ipv6
+    strategy: Ipv4thenIpv6
+    # Cache size is in number of records (some records can be large)
+    cache_size: 32
+
+# DNS requests will be forwarded to all the upstream servers set up here
+# except those with `default = false`.
+upstreams:
+    # The 'dnspod' is the name of the upstream server.
+    # It can be used later in the rules.
+    dnspod:
+        # Default port 53 can be ignored for DNS over UDP
+        address: # the address of the DNS server
+            - 119.29.29.29
+        network: udp
+        # Use socks5 to connnect the upstream server. For example: socks5://user:pass@127.0.0.1:1080
+        proxy: socks5://127.0.0.1:1080
+    opendns:
+        # If you use a non-standard port, you should specify the port in the address.
+        address:
+            - 208.67.222.222:5353
+        # TCP is supported
+        network: tcp
+        # Use socks5 or http proxy to connnect the upstream server. For example: socks5://user:pass@127.0.0.1:1080, http://user:pass@127.0.0.1:8118
+        proxy: socks5://127.0.0.1:1080
+    opendns_v6:
+        # IPv6 is supported.
+        address:
+            - "[2620:0:ccc::2]:5353"
+        network: tcp
+    cloudflare:
+        # We ignore the port here. The default port 853 for DNS over TLS is used.
+        address:
+            - 1.1.1.1
+        # DNS over TLS is supported.
+        network: tls
+        # If you use DNS over TLS, you must give the TLS host of the upstream server.
+        tls-host: cloudflare-dns.com
+        # Use socks5 or http proxy to connnect the upstream server. For example: socks5://user:pass@127.0.0.1:1080, http://user:pass@127.0.0.1:8118
+        proxy: socks5://127.0.0.1:1080
+    google:
+        # The default port 433 for DNS over HTTPS is used.
+        address:
+            - 8.8.8.8
+            - 8.8.4.4
+        # DNS over HTTPS is supported.
+        network: https
+        # If you use DNS over HTTPS, you must give the TLS host of the upstream server.
+        tls-host: dns.google
+        # Use socks5 or http proxy to connnect the upstream server. For example: socks5://user:pass@127.0.0.1:1080, http://user:pass@127.0.0.1:8118
+        proxy: socks5://127.0.0.1:1080
+    google_h3:
+        # The default port 433 for DNS over HTTP3 is used.
+        address:
+            - 8.8.8.8
+            - 8.8.4.4
+        # DNS over HTTP3 is supported.
+        network: h3
+        # If you use DNS over HTTP3, you must give the TLS host of the upstream server.
+        tls-host: dns.google
+        # Use socks5 to connnect the upstream server. For example: socks5://user:pass@127.0.0.1:1080
+        proxy: socks5://127.0.0.1:1080
+    opennic:
+        address:
+            - 2a05:dfc7:5::53
+        network: udp
+        # This tells ya-dns not to forward requests to this server by default.
+        # But you can use it by applying dispatching rules.
+        default: false
+
+# Domain lists are defined here. They can be used later in your rules.
+domains:
+    # The 'opennic' is the tag of the domain list.
+    # It is useful in the rules later in the file.
+    opennic:
+        # You can define the patterns directly in the config file using the list attribute.
+        # If one of the patterns matches the right end of the domain, then the domain
+        # is considered inside of this domain list.
+        list:
+            - .bbs
+            - .chan
+            - .cyb
+            - .dyn
+            - .geek
+            - .gopher
+            - .indy
+            - .libre
+            - .neo
+            - .null
+            - .o
+            - .oss
+            - .oz
+            - .parody
+            - .pirate
+    poisoned:
+        list:
+            - twitter.com
+            - facebook.com
+            - youtube.com
+        # Besides defining patterns directly in the config file, it is allowed
+        # to read them from files. Each file should contain lines of patterns only,
+        # except empty lines and lines starting with `#`, which means it is a comment.
+        files:
+            - gfwlist.txt
+
+# Set up the IP ranges you want to use later in your rules here.
+ranges:
+    # The 'my_range' is the name of the range.
+    # It can be used later in the rules.
+    my_range:
+        # You can define CIDRs directly in the config file using the list attribute.
+        # IPv4 CIDRs and IPv6 CIDRs can be mixed.
+        list:
+            - 10.0.0.0/8
+            - 172.16.0.0/12
+            - 192.168.0.0/16
+            - fd00::/8
+        # Besides defining CIDRs directly in the config file, it is allowed
+        # to read them from files. Each file should contain lines of CIDRs only,
+        # except empty lines and lines starting with `#`, which means it is a comment.
+        files:
+            - chnroutes.txt
+# Of course, it is okay to use 'list' or 'files' alone to define an IP range.
+
+# Dispatching rules are defined in 'requests' tables. They are used to determine
+# which upstream servers the requests are forwarded to.
+# If all defined requirements are met, the rule is applied.
+# Dispatching rules are checked in the same order as they are defined.
+# Only the first matched rule will be applied.
+# If no rule is matched, the request will be forwarded to all default servers.
+requests:
+    - domains: # requires that the domain is in one of the specific domain lists
+          - opennic
+      types: # requires that the record type is in the list
+          - A
+          - AAAA
+      # Here defines the names of the upstream servers you would like to dispatch the requests to.
+      # The default upstream servers are ignored. Requests are forwarded only to the servers defined here.
+      upstreams:
+          - opennic
+    - # The domains array can contain tags with a leading `!` for inversion.
+      # For instance, '!poisoned' matches all domains which are not in the 'poisoned' domain list.
+      domains:
+          - "!poisoned"
+      upstreams:
+          - dnspod
+    - # This rule instructs ya-dns to dispatch AAAA queries to specific upstreams.
+      types:
+          - AAAA
+      upstreams:
+          - opendns_v6
+          - cloudflare
+
+# Multiple rules can be defined to filter responses.
+# If all defined requirements are met, the rule is applied.
+# Rules are checked in the same order as they defined. Only the first matched rule will be applied.
+# The first response which is not dropped is adopted and returned to the client.
+responses:
+    - domains: # requires the domain is in one of the specific domain lists
+          - poisoned
+      ranges: # requires the response IP is in one of the specific IP ranges
+          - my_range
+      upstreams: # requires the response is from one of the specific upstream servers
+          - opendns
+          - opendns_v6
+      # Currently, 'drop' is the only available action.
+      # More actions may be added in the future.
+      action: drop
+    - upstreams:
+          - dnspod
+      # The ranges and domains array can contain names with a leading `!` for inversion.
+      # For instance, `!my_range` matches all IP addresses which are not in the `my_range` range.
+      action: drop
+      domains:
+          - "!poisoned"
+      ranges:
+          - "!my_range"
+    - # It is also allowed to have no requirements.
+      # This rule matches all responses. So It will drop all the responses.
+      action: drop

@@ -1,0 +1,112 @@
+bind: 0.0.0.0:5300
+log: debug
+
+resolver_opts:
+    #strategy: Ipv4thenIpv6
+    cache_size: 0
+
+upstreams:
+    dnspod:
+        address:
+            - 119.29.29.29
+        network: udp
+        tls-host: doh.pub
+        #proxy: socks5://10.255.1.104:10808
+
+    alidns:
+        address:
+            - 223.5.5.5
+        network: https
+        tls-host: dns.alidns.com
+        #proxy: socks5://10.255.1.104:10808
+
+    google:
+        address:
+            - 8.8.8.8
+            - 8.8.4.4
+        network: h3
+        tls-host: dns.google
+        proxy: socks5://10.255.1.104:10808
+
+    cloudflare:
+        address:
+            - 1.1.1.1
+            - 1.0.0.1
+        network: tcp
+        tls-host: cloudflare-dns.com
+        proxy: socks5://10.255.1.104:10808
+
+    opennic:
+        address:
+            - 134.195.4.2
+            - 161.97.219.84
+        default: false
+        network: udp
+
+    gfw:
+        address:
+            - 172.17.0.3
+        default: false
+        network: udp
+
+domains:
+    opennic:
+        list:
+            - .bbs
+            - .chan
+            - .cyb
+            - .dyn
+            - .geek
+            - .gopher
+            - .indy
+            - .libre
+            - .neo
+            - .null
+            - .o
+            - .oss
+            - .oz
+            - .parody
+            - .pirate
+
+    proxy:
+        # download from https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/proxy-list.txt
+        files:
+            - proxy-list.txt
+
+    direct:
+        # download from https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/direct-list.txt
+        # or https://raw.githubusercontent.com/v2fly/domain-list-community/refs/heads/release/cn.txt  (current use)
+        files:
+            - direct-list.txt
+
+ranges:
+    cn:
+        # download from https://www.ipdeny.com/ipblocks/data/aggregated/cn.zone
+        files:
+            - cn.txt
+
+requests:
+    - domains:
+          - direct
+      upstreams:
+          - dnspod
+
+    - domains:
+          - proxy
+      upstreams:
+          - google
+
+    - domains:
+          - opennic
+      upstreams:
+          - opennic
+
+responses:
+    - action: drop
+      domains:
+          - "!direct"
+      ranges:
+          - "!cn"
+      upstreams:
+          - alidns
+          - dnspod

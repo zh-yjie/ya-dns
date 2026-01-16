@@ -10,6 +10,7 @@ use std::io::BufReader;
 use std::io::prelude::*;
 use std::net::IpAddr;
 use std::net::SocketAddr;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::Duration;
 use thiserror::Error;
@@ -18,6 +19,14 @@ use thiserror::Error;
 pub enum ConfigError {
     #[error("You must configure at least one default upstream server!")]
     NoUpstream,
+    #[error("Config file not found.")]
+    FileNotFound,
+    #[error("{0}: {1}")]
+    Io(std::io::Error, PathBuf),
+    #[error("{0}")]
+    Toml(toml::de::Error),
+    #[error("{0}")]
+    Yaml(serde_yaml::Error),
     #[error("{0}:{1}")]
     InvalidAddress(std::net::AddrParseError, String),
     #[cfg(any(
@@ -94,6 +103,21 @@ pub enum Upstream {
 }
 
 impl ConfigBuilder {
+    pub fn from_file(path: &Path) -> Result<Self, ConfigError> {
+        let mut file = File::open(path).map_err(|e| ConfigError::Io(e, path.to_path_buf()))?;
+        let mut contents = String::new();
+        file.read_to_string(&mut contents)
+            .map_err(|e| ConfigError::Io(e, path.to_path_buf()))?;
+
+        let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+
+        let config_builder: ConfigBuilder = match extension {
+            "toml" => toml::from_str(&contents).map_err(ConfigError::Toml)?,
+            "yaml" | "yml" => serde_yaml::from_str(&contents).map_err(ConfigError::Yaml)?,
+            _ => panic!("Unsupported file extension"),
+        };
+        Ok(config_builder)
+    }
     pub fn build(self) -> Result<Config, ConfigError> {
         let mut default_upstreams = Vec::new();
 

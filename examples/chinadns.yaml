@@ -1,0 +1,35 @@
+bind: 127.0.0.1:5300
+upstreams:
+  dnspod:
+    address:
+      - 119.29.29.29
+    network: udp
+  alidns:
+    address:
+      - 223.5.5.5
+      - 223.6.6.6
+    network: udp
+  opendns:
+    address:
+      - 208.67.222.222:5353
+    network: tcp
+    proxy: socks5://127.0.0.1:1080
+  cloudflare:
+    address:
+      - 1.1.1.1
+      - 1.0.0.1
+    network: tls
+    proxy: socks5://127.0.0.1:1080
+    tls-host: cloudflare-dns.com
+ranges:
+  cn:
+    # download from https://www.ipdeny.com/ipblocks/data/countries/cn.zone
+    files:
+      - cn.txt
+responses:
+  - action: drop
+    ranges:
+      - "!cn"
+    upstreams:
+      - dnspod
+      - alidns
