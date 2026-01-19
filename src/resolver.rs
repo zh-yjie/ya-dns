@@ -62,30 +62,30 @@ impl From<(&Upstream, Option<MyResolverOpts>)> for RecursiveResolver {
                 address,
                 tls_host,
                 proxy,
-            } => (Protocol::Tls, address, Some(tls_host.clone()), proxy),
+            } => (Protocol::Tls, address, Some(tls_host.as_str()), proxy),
             #[cfg(feature = "dns-over-https")]
             Upstream::HttpsUpstream {
                 address,
                 tls_host,
                 proxy,
-            } => (Protocol::Https, address, Some(tls_host.clone()), proxy),
+            } => (Protocol::Https, address, Some(tls_host.as_str()), proxy),
             #[cfg(feature = "dns-over-h3")]
             Upstream::H3Upstream {
                 address,
                 tls_host,
                 proxy,
-            } => (Protocol::H3, address, Some(tls_host.clone()), proxy),
+            } => (Protocol::H3, address, Some(tls_host.as_str()), proxy),
             #[cfg(feature = "dns-over-quic")]
             Upstream::QuicUpstream {
                 address,
                 tls_host,
                 proxy,
-            } => (Protocol::Quic, address, Some(tls_host.clone()), proxy),
+            } => (Protocol::Quic, address, Some(tls_host.as_str()), proxy),
         };
         let mut resolver_config = ResolverConfig::new();
         address.iter().for_each(|addr| {
             let mut name_server_config = NameServerConfig::new(*addr, protocol);
-            name_server_config.tls_dns_name = tls_host.clone();
+            name_server_config.tls_dns_name = tls_host.map(String::from);
             resolver_config.add_name_server(name_server_config);
         });
         let runtime_provider =

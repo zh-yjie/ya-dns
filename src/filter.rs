@@ -88,11 +88,11 @@ pub fn resolvers(cfg: &HandlerConfig, query: &LowerQuery) -> Vec<String> {
 
     if let Some(rule) = rule {
         debug!("Query {} matches rule {:?}", name, rule);
-        rule.upstreams.iter().map(String::from).collect()
+        rule.upstreams.clone()
     } else {
         debug!("No rule matches for {}. Use defaults.", name);
         // If no rule matches, use defaults
-        cfg.defaults.iter().map(String::from).collect()
+        cfg.defaults.to_vec()
     }
 }
 

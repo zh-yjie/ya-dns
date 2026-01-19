@@ -37,19 +37,19 @@ async-recursion = "1"
 async-trait = "0.1"
 clap = {version = "4", features = ["derive"]}
 console-subscriber = {version = "0.5", optional = true}
-env_logger = {version = "0.11", optional = true}
+env_logger = {version = "0.11", optional = true, default-features = false, features = ["auto-color", "humantime"]}
 fast-socks5 = "0.10"
 futures = {version = "0.3", default-features = false, features = ["executor"]}
 hickory-proto = {version = "0.25", default-features = false}
 hickory-resolver = {version = "0.25", default-features = false, features = ["tokio"]}
-hickory-server = "0.25"
+hickory-server = {version = "0.25", default-features = false}
 ipnet = "2"
 iprange = "0.6"
 log = "0.4"
 pin-project-lite = {version = "0.2", optional = true}
 publicsuffix = "2"
 quinn = {version = "0.11", optional = true}
-regex = "1"
+regex = {version = "1", default-features = false, features = ["unicode"]}
 serde = "1"
 serde_derive = "1"
 thiserror = "2"

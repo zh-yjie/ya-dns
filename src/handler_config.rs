@@ -50,13 +50,13 @@ impl From<Config> for HandlerConfig {
             .into_iter()
             .map(|(name, domains)| match domains.build() {
                 Ok(domains) => (
-                    name.clone(),
+                    name,
                     Domains {
                         regex_set: RegexSet::new(&domains.regex_set).unwrap_or_default(),
                         suffix: domains.suffix_set.join("\n").parse().unwrap_or_default(),
                     },
                 ),
-                Err(_) => (name.clone(), Domains::default()),
+                Err(_) => (name, Domains::default()),
             })
             .collect();
 
