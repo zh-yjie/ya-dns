@@ -2,7 +2,7 @@ use crate::config::{Config, ConfigBuilder, ConfigError};
 use crate::handler::Handler;
 use crate::option::Args;
 use clap::Parser;
-use hickory_server::ServerFuture;
+use hickory_server::Server;
 use log::info;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -42,7 +42,7 @@ async fn main() -> io::Result<()> {
     init_logger(config.log_level);
 
     let bind_socket = config.bind;
-    let mut server = ServerFuture::new(Handler::new(config.into()));
+    let mut server = Server::new(Handler::new(config.into()));
 
     let bind = UdpSocket::bind(bind_socket).await?;
     info!("Listening on UDP: {}", bind_socket);
@@ -50,9 +50,9 @@ async fn main() -> io::Result<()> {
 
     let bind = TcpListener::bind(bind_socket).await?;
     info!("Listening on TCP: {}", bind_socket);
-    server.register_listener(bind, Duration::from_secs(10));
+    server.register_listener(bind, Duration::from_secs(10), 32);
 
-    Ok(server.block_until_done().await?)
+    server.block_until_done().await.map_err(io::Error::other)
 }
 
 #[cfg(feature = "logging")]

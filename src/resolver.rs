@@ -1,8 +1,8 @@
 use hickory_proto::rr::RecordType;
-use hickory_proto::xfer::Protocol;
-use hickory_resolver::config::{NameServerConfig, ResolverConfig, ResolverOpts};
+use hickory_resolver::Resolver;
+use hickory_resolver::config::{ConnectionConfig, NameServerConfig, ResolverConfig, ResolverOpts};
 use hickory_resolver::lookup::Lookup;
-use hickory_resolver::{ResolveError, Resolver};
+use hickory_resolver::net::NetError;
 
 use crate::config::{ResolverOpts as MyResolverOpts, Upstream};
 use crate::resolver_runtime_provider::{ProxyConnectionProvider, ProxyRuntimeProvider};
@@ -23,22 +23,18 @@ impl RecursiveResolver {
         let options = resolver_opts.unwrap_or(MyResolverOpts {
             timeout: opts.timeout,
             ip_strategy: None,
-            cache_size: opts.cache_size,
+            cache_size: usize::try_from(opts.cache_size).unwrap_or(8192),
         });
         opts.timeout = options.timeout;
         opts.ip_strategy = options.ip_strategy.unwrap_or_default();
-        opts.cache_size = options.cache_size;
+        opts.cache_size = u64::try_from(options.cache_size).unwrap_or(8192);
         let mut builder = Resolver::builder_with_config(resolver_config, provider);
         *builder.options_mut() = opts;
-        let resolver = builder.build();
+        let resolver = builder.build().expect("failed to build resolver");
         RecursiveResolver { resolver, options }
     }
 
-    pub async fn resolve(
-        &self,
-        domain: &str,
-        record_type: RecordType,
-    ) -> Result<Lookup, ResolveError> {
+    pub async fn resolve(&self, domain: &str, record_type: RecordType) -> Result<Lookup, NetError> {
         match record_type {
             RecordType::A | RecordType::AAAA => match self.options.ip_strategy {
                 Some(_) => match self.resolver.lookup_ip(domain).await {
@@ -54,43 +50,61 @@ impl RecursiveResolver {
 
 impl From<(&Upstream, Option<MyResolverOpts>)> for RecursiveResolver {
     fn from((upstream, config): (&Upstream, Option<MyResolverOpts>)) -> Self {
-        let (protocol, address, tls_host, proxy) = match upstream {
-            Upstream::UdpUpstream { address, proxy } => (Protocol::Udp, address, None, proxy),
-            Upstream::TcpUpstream { address, proxy } => (Protocol::Tcp, address, None, proxy),
+        let (connection, address, proxy) = match upstream {
+            Upstream::UdpUpstream { address, proxy } => (ConnectionConfig::udp(), address, proxy),
+            Upstream::TcpUpstream { address, proxy } => (ConnectionConfig::tcp(), address, proxy),
             #[cfg(feature = "dns-over-tls")]
             Upstream::TlsUpstream {
                 address,
                 tls_host,
                 proxy,
-            } => (Protocol::Tls, address, Some(tls_host.as_str()), proxy),
+            } => (
+                ConnectionConfig::tls(tls_host.as_str().into()),
+                address,
+                proxy,
+            ),
             #[cfg(feature = "dns-over-https")]
             Upstream::HttpsUpstream {
                 address,
                 tls_host,
                 proxy,
-            } => (Protocol::Https, address, Some(tls_host.as_str()), proxy),
+            } => (
+                ConnectionConfig::https(tls_host.as_str().into(), None),
+                address,
+                proxy,
+            ),
             #[cfg(feature = "dns-over-h3")]
             Upstream::H3Upstream {
                 address,
                 tls_host,
                 proxy,
-            } => (Protocol::H3, address, Some(tls_host.as_str()), proxy),
+            } => (
+                ConnectionConfig::h3(tls_host.as_str().into(), None),
+                address,
+                proxy,
+            ),
             #[cfg(feature = "dns-over-quic")]
             Upstream::QuicUpstream {
                 address,
                 tls_host,
                 proxy,
-            } => (Protocol::Quic, address, Some(tls_host.as_str()), proxy),
+            } => (
+                ConnectionConfig::quic(tls_host.as_str().into()),
+                address,
+                proxy,
+            ),
         };
-        let mut resolver_config = ResolverConfig::new();
+        let mut resolver_config = ResolverConfig::default();
         address.iter().for_each(|addr| {
-            let mut name_server_config = NameServerConfig::new(*addr, protocol);
-            name_server_config.tls_dns_name = tls_host.map(String::from);
+            let mut name_server_config = NameServerConfig::udp(addr.ip());
+            let mut server_connection = connection.clone();
+            server_connection.port = addr.port();
+            name_server_config.connections = vec![server_connection];
             resolver_config.add_name_server(name_server_config);
         });
         let runtime_provider =
             ProxyRuntimeProvider::new(proxy.as_ref().map(|p| p.parse().unwrap()));
-        let provider = ProxyConnectionProvider::new(runtime_provider);
+        let provider = runtime_provider;
         RecursiveResolver::new(resolver_config, config, provider)
     }
 }
@@ -115,8 +129,9 @@ mod tests {
         let response = resolver.resolve("dns.google", RecordType::A).await.unwrap();
         assert!(
             response
-                .record_iter()
-                .any(|r| r.data().to_string().eq("8.8.8.8"))
+                .answers()
+                .iter()
+                .any(|r| r.data.to_string().eq("8.8.8.8"))
         );
     }
 
@@ -134,8 +149,9 @@ mod tests {
         let response = resolver.resolve("dns.google", RecordType::A).await.unwrap();
         assert!(
             response
-                .record_iter()
-                .any(|r| r.data().to_string().eq("8.8.8.8"))
+                .answers()
+                .iter()
+                .any(|r| r.data.to_string().eq("8.8.8.8"))
         );
     }
 
@@ -156,8 +172,9 @@ mod tests {
         let response = resolver.resolve("dns.google", RecordType::A).await.unwrap();
         assert!(
             response
-                .record_iter()
-                .any(|r| r.data().to_string().eq("8.8.8.8"))
+                .answers()
+                .iter()
+                .any(|r| r.data.to_string().eq("8.8.8.8"))
         );
     }
 
@@ -178,8 +195,9 @@ mod tests {
         let response = resolver.resolve("dns.google", RecordType::A).await.unwrap();
         assert!(
             response
-                .record_iter()
-                .any(|r| r.data().to_string().eq("8.8.8.8"))
+                .answers()
+                .iter()
+                .any(|r| r.data.to_string().eq("8.8.8.8"))
         );
     }
 
@@ -200,8 +218,9 @@ mod tests {
         let response = resolver.resolve("dns.google", RecordType::A).await.unwrap();
         assert!(
             response
-                .record_iter()
-                .any(|r| r.data().to_string().eq("8.8.8.8"))
+                .answers()
+                .iter()
+                .any(|r| r.data.to_string().eq("8.8.8.8"))
         );
     }
 }

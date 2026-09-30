@@ -234,7 +234,7 @@ impl ResolverOptsConfig {
                     StrategyType::None => None,
                 })
                 .unwrap_or(None),
-            cache_size: self.cache_size.unwrap_or(32),
+            cache_size: self.cache_size.unwrap_or(8192),
         }
     }
 }

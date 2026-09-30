@@ -2,7 +2,7 @@ use crate::{
     config::{RequestRule, ResponseRule, RuleAction},
     handler_config::HandlerConfig,
 };
-use hickory_proto::{op::LowerQuery, rr::RecordType};
+use hickory_proto::{op::LowerQuery, rr::RData};
 use hickory_resolver::lookup::Lookup;
 use log::debug;
 
@@ -12,7 +12,7 @@ pub fn check_response(
     upstream_name: &str,
     resp: &Lookup,
 ) -> RuleAction {
-    let answers = resp.records();
+    let answers = resp.answers();
 
     // Drop empty response
     if answers.is_empty() {
@@ -41,15 +41,9 @@ pub fn check_response(
                         .map(|range| {
                             answers
                                 .iter()
-                                .filter_map(|rec| match rec.record_type() {
-                                    RecordType::A => {
-                                        let ip = rec.data().as_a().unwrap().0;
-                                        Some(range.contains((ip).into()))
-                                    }
-                                    RecordType::AAAA => {
-                                        let ip = rec.data().as_aaaa().unwrap().0;
-                                        Some(range.contains((ip).into()))
-                                    }
+                                .filter_map(|rec| match &rec.data {
+                                    RData::A(ip) => Some(range.contains(ip.0.into())),
+                                    RData::AAAA(ip) => Some(range.contains(ip.0.into())),
                                     _ => None,
                                 })
                                 .next()

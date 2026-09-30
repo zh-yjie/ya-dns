@@ -1,10 +1,11 @@
 use crate::{config::RuleAction, filter, handler_config::HandlerConfig};
 use hickory_proto::{op::LowerQuery, rr::Record};
-use hickory_resolver::{ResolveError, lookup::Lookup};
+use hickory_resolver::{lookup::Lookup, net::NetError};
 use hickory_server::{
-    authority::MessageResponseBuilder,
-    proto::op::{Header, MessageType, OpCode, ResponseCode},
+    net::runtime::Time,
+    proto::op::{MessageType, Metadata, OpCode, ResponseCode},
     server::{Request, RequestHandler, ResponseHandler, ResponseInfo},
+    zone_handler::MessageResponseBuilder,
 };
 use log::debug;
 use std::time::Duration;
@@ -61,18 +62,20 @@ impl Handler {
     }
 
     /// Handle request, returning ResponseInfo if response was successfully sent, or an error.
-    async fn do_handle_request(&self, request: &Request) -> Result<RequestResult, ResolveError> {
-        let query = &request.queries()[0];
+    async fn do_handle_request(&self, request: &Request) -> Result<RequestResult, NetError> {
+        let query = &request.queries.queries()[0];
         debug!("DNS requests are forwarded to [{}].", query);
         // make sure the request is a query and the message type is a query
-        if request.op_code() != OpCode::Query || request.message_type() != MessageType::Query {
+        if request.metadata.op_code != OpCode::Query
+            || request.metadata.message_type != MessageType::Query
+        {
             return Ok(RequestResult::new_with_code(ResponseCode::Refused));
         }
         self.lookup(query).await
     }
 
     /// Lookup for anything else (NXDOMAIN)
-    async fn lookup(&self, query: &LowerQuery) -> Result<RequestResult, ResolveError> {
+    async fn lookup(&self, query: &LowerQuery) -> Result<RequestResult, NetError> {
         //self.counter.fetch_add(1, Ordering::SeqCst);
         let config = &self.config;
         let resolvers = filter::resolvers(config, query);
@@ -136,13 +139,13 @@ impl Handler {
 
 #[async_trait::async_trait]
 impl RequestHandler for Handler {
-    async fn handle_request<R: ResponseHandler>(
+    async fn handle_request<R: ResponseHandler, T: Time>(
         &self,
         request: &Request,
         mut response: R,
     ) -> ResponseInfo {
         // try to handle request
-        let result = if request.queries().len() > 0 {
+        let result = if !request.queries.queries().is_empty() {
             match self.do_handle_request(request).await {
                 Ok(info) => info,
                 Err(e) => {
@@ -153,14 +156,14 @@ impl RequestHandler for Handler {
         } else {
             RequestResult::new_with_code(ResponseCode::FormErr)
         };
-        let answers = result.answers.as_ref().map(Lookup::records).unwrap_or(&[]);
+        let answers = result.answers.as_ref().map(Lookup::answers).unwrap_or(&[]);
         let name_servers = result.name_servers.unwrap_or_default();
         let soa = result.soa.unwrap_or_default();
         let builder = MessageResponseBuilder::from_message_request(request);
-        let mut header = Header::response_from_request(request.header());
-        header.set_response_code(result.code);
-        header.set_recursion_available(true);
-        let message = builder.build(header, answers, name_servers.iter(), soa.iter(), &[]);
+        let mut metadata = Metadata::response_from_request(&request.metadata);
+        metadata.response_code = result.code;
+        metadata.recursion_available = true;
+        let message = builder.build(metadata, answers, name_servers.iter(), soa.iter(), &[]);
         response.send_response(message).await.unwrap()
     }
 }

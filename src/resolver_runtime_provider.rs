@@ -1,10 +1,9 @@
 use futures::Future;
 #[cfg(any(feature = "dns-over-h3", feature = "dns-over-quic"))]
-use hickory_proto::runtime::QuicSocketBinder;
-use hickory_proto::runtime::{
+use hickory_resolver::net::runtime::QuicSocketBinder;
+use hickory_resolver::net::runtime::{
     RuntimeProvider, TokioHandle, TokioTime, iocompat::AsyncIoTokioAsStd,
 };
-use hickory_resolver::name_server::GenericConnector;
 use std::io;
 use std::net::SocketAddr;
 use std::pin::Pin;
@@ -115,4 +114,4 @@ impl QuicSocketBinder for ProxyRuntimeProvider {
     }
 }
 
-pub type ProxyConnectionProvider = GenericConnector<ProxyRuntimeProvider>;
+pub type ProxyConnectionProvider = ProxyRuntimeProvider;
