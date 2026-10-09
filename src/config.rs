@@ -434,7 +434,12 @@ impl DomainsConf {
                     Some(index) => line1[..index].to_string(),
                     None => String::from(line1),
                 };
-                suffix_set.push(dm);
+                let domain = dm.strip_prefix('!').unwrap_or(&dm);
+                if hickory_proto::rr::Name::from_utf8(domain).is_ok() {
+                    suffix_set.push(dm);
+                } else {
+                    log::warn!("ignoring invalid domain suffix: {dm}");
+                }
             }
         };
 
@@ -524,5 +529,30 @@ impl<T, E> Transpose for Option<Result<T, E>> {
             Some(Err(e)) => Err(e),
             None => Ok(None),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DomainsConf;
+
+    #[test]
+    fn build_skips_invalid_domain_suffixes() {
+        let domains = DomainsConf {
+            files: None,
+            list: Some(vec![
+                "example.com".to_string(),
+                "xn--.example".to_string(),
+                "*.ck".to_string(),
+                "!www.ck".to_string(),
+            ]),
+        }
+        .build()
+        .unwrap();
+
+        assert!(domains.suffix_set.contains(&"example.com".to_string()));
+        assert!(!domains.suffix_set.contains(&"xn--.example".to_string()));
+        assert!(domains.suffix_set.contains(&"*.ck".to_string()));
+        assert!(domains.suffix_set.contains(&"!www.ck".to_string()));
     }
 }
