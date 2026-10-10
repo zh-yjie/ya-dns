@@ -2,7 +2,6 @@
 
 - update hickory-dns to 0.26
 - update fast-socks5 to 1
-- increase default resolver cache size to 8192
 
 # 0.7.0
 

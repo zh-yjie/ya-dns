@@ -193,14 +193,14 @@ impl ConfigBuilder {
 pub struct ResolverOpts {
     pub timeout: Duration,
     pub ip_strategy: Option<LookupIpStrategy>,
-    pub cache_size: usize,
+    pub cache_size: u64,
 }
 
 #[derive(Debug, Deserialize)]
 struct ResolverOptsConfig {
     timeout: Option<u64>,
     strategy: Option<StrategyType>,
-    cache_size: Option<usize>,
+    cache_size: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -221,8 +221,9 @@ enum StrategyType {
 
 impl ResolverOptsConfig {
     fn build(self) -> ResolverOpts {
+        let default_opts = hickory_resolver::config::ResolverOpts::default();
         ResolverOpts {
-            timeout: Duration::from_secs(self.timeout.unwrap_or(5)),
+            timeout: Duration::from_secs(self.timeout.unwrap_or(default_opts.timeout.as_secs())),
             ip_strategy: self
                 .strategy
                 .map(|s| match s {

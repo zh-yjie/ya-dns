@@ -20,7 +20,7 @@ resolver_opts:
     #   Ipv4thenIpv6, Query for Ipv4 if that fails, query for Ipv6
     strategy: Ipv4thenIpv6
     # Cache size is in number of records (some records can be large)
-    cache_size: 32
+    cache_size: 8192
 
 # DNS requests will be forwarded to all the upstream servers set up here
 # except those with `default = false`.

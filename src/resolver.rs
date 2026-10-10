@@ -23,11 +23,11 @@ impl RecursiveResolver {
         let options = resolver_opts.unwrap_or(MyResolverOpts {
             timeout: opts.timeout,
             ip_strategy: None,
-            cache_size: usize::try_from(opts.cache_size).unwrap_or(8192),
+            cache_size: opts.cache_size,
         });
         opts.timeout = options.timeout;
         opts.ip_strategy = options.ip_strategy.unwrap_or_default();
-        opts.cache_size = u64::try_from(options.cache_size).unwrap_or(8192);
+        opts.cache_size = options.cache_size;
         let mut builder = Resolver::builder_with_config(resolver_config, provider);
         *builder.options_mut() = opts;
         let resolver = builder.build().expect("failed to build resolver");
